@@ -7,11 +7,23 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo-express:
+    image: mongo-express:1
+    ports:
+      - "8082:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
   firebase-emulator:
     build:
       context: ./firebase-emulator
     ports:
       - "9099:9099"
+      - "4000:4000"
     healthcheck:
       test: ["CMD", "node", "-e", "const h=require('http');h.get('http://localhost:9099/',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s

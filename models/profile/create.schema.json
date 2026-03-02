@@ -6,8 +6,11 @@
   "properties": {
     "username": {
       "$ref": "base.schema.json#/properties/username"
+    },
+    "displayName": {
+      "$ref": "base.schema.json#/properties/displayName"
     }
   },
-  "required": ["username"],
+  "required": ["username", "displayName"],
   "additionalProperties": false
 }

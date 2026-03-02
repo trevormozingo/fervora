@@ -32,7 +32,7 @@
       "format": "date",
       "default": null,
       "description": "User's date of birth (YYYY-MM-DD)"
-    },  
-    "additionalProperties": false
-  }
+    }
+  },
+  "additionalProperties": false
 }
