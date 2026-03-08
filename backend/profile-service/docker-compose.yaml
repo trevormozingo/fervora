@@ -3,7 +3,7 @@ services:
     image: mongo:7
     ports:
       - "27017:27017"
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--setParameter", "maxTransactionLockRequestTimeoutMillis=10000"]
     healthcheck:
       test: >
         mongosh --eval "

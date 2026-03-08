@@ -144,11 +144,15 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
 
     Returns None if the user has no profile (rejected).
     Uses a transaction so profile check, post insert, and feed fan-out
-    are atomic.
+    are atomic.  Write-locks the profile to conflict with concurrent
+    delete_profile.
     """
     async with await _client.start_session() as session:
         async with session.start_transaction():
-            profile = await _profiles().find_one({"_id": uid}, session=session)
+            # Write-lock profile to prevent concurrent deletion
+            profile = await _profiles().find_one_and_update(
+                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+            )
             if profile is None:
                 return None
 
@@ -222,14 +226,20 @@ async def follow_user(follower_uid: str, following_uid: str) -> bool | None:
     either user has no profile.
 
     Uses a transaction so profile checks + insert are atomic.
+    Write-locks both profiles to conflict with concurrent delete_profile.
     """
     async with await _client.start_session() as session:
         try:
             async with session.start_transaction():
-                follower = await _profiles().find_one({"_id": follower_uid}, session=session)
+                # Write-lock both profiles
+                follower = await _profiles().find_one_and_update(
+                    {"_id": follower_uid}, {"$inc": {"_v": 1}}, session=session
+                )
                 if follower is None:
                     return None
-                target = await _profiles().find_one({"_id": following_uid}, session=session)
+                target = await _profiles().find_one_and_update(
+                    {"_id": following_uid}, {"$inc": {"_v": 1}}, session=session
+                )
                 if target is None:
                     return None
                 await _follows().insert_one(
@@ -318,22 +328,28 @@ async def set_reaction(
     Set a reaction on a post. One reaction per user per post.
     If the user already reacted, update the type.
     Returns None if the post doesn't exist.
+    Write-locks the post to conflict with concurrent delete_post.
     """
     try:
         oid = ObjectId(post_id)
     except Exception:
         return None
-    # Verify post exists
-    post = await _posts().find_one({"_id": oid})
-    if post is None:
-        return None
-    doc = await _reactions().find_one_and_update(
-        {"postId": oid, "uid": uid},
-        {"$set": {"postId": oid, "uid": uid, "type": reaction_type}},
-        upsert=True,
-        return_document=True,
-    )
-    return doc
+    async with await _client.start_session() as session:
+        async with session.start_transaction():
+            # Write-lock post to prevent concurrent deletion
+            post = await _posts().find_one_and_update(
+                {"_id": oid}, {"$inc": {"_v": 1}}, session=session
+            )
+            if post is None:
+                return None
+            doc = await _reactions().find_one_and_update(
+                {"postId": oid, "uid": uid},
+                {"$set": {"postId": oid, "uid": uid, "type": reaction_type}},
+                upsert=True,
+                return_document=True,
+                session=session,
+            )
+            return doc
 
 
 async def remove_reaction(post_id: str, uid: str) -> bool:
@@ -373,6 +389,7 @@ async def create_comment(
     """
     Create a comment on a post. Returns None if post doesn't exist.
     Requires the user to have a profile.
+    Write-locks profile and post to conflict with concurrent deletions.
     """
     try:
         oid = ObjectId(post_id)
@@ -380,10 +397,15 @@ async def create_comment(
         return None
     async with await _client.start_session() as session:
         async with session.start_transaction():
-            profile = await _profiles().find_one({"_id": uid}, session=session)
+            # Write-lock profile and post
+            profile = await _profiles().find_one_and_update(
+                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+            )
             if profile is None:
                 return None
-            post = await _posts().find_one({"_id": oid}, session=session)
+            post = await _posts().find_one_and_update(
+                {"_id": oid}, {"$inc": {"_v": 1}}, session=session
+            )
             if post is None:
                 return None
             now = datetime.now(timezone.utc).isoformat()
@@ -442,10 +464,14 @@ async def create_event(
     """
     Create an event. Requires a profile.
     Converts inviteeUids to invitees with status=pending.
+    Write-locks the profile to conflict with concurrent delete_profile.
     """
     async with await _client.start_session() as session:
         async with session.start_transaction():
-            profile = await _profiles().find_one({"_id": uid}, session=session)
+            # Write-lock profile to prevent concurrent deletion
+            profile = await _profiles().find_one_and_update(
+                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+            )
             if profile is None:
                 return None
 
