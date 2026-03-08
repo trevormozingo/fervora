@@ -4,8 +4,8 @@ Profile CRUD integration tests.
 Tests match the schema contracts exactly:
   create.schema.json  → POST /profile     { username, displayName? }
   update.schema.json  → PATCH /profile    { displayName?, bio?, birthday? }  minProperties:1
-  public.schema.json  → GET /profile/{u}  { username, displayName, bio, birthday }
-  private.schema.json → GET /profile      { username, displayName, bio, birthday }
+  public.schema.json  → GET /profile/{u}  { id, username, displayName, bio, birthday }
+  private.schema.json → GET /profile      { id, username, displayName, bio, birthday }
 """
 
 import os
@@ -18,7 +18,7 @@ BASE = os.environ.get("SERVICE_URL", "http://localhost:8000")
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.environ.get("MONGO_DB", "ironguild_test")
 
-PROFILE_FIELDS = {"username", "displayName", "bio", "birthday"}
+PROFILE_FIELDS = {"id", "username", "displayName", "bio", "birthday"}
 
 
 def _uid() -> str:

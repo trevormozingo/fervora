@@ -2,7 +2,7 @@
 Profile routes.
 
 Response shapes match public.schema.json and private.schema.json exactly:
-  { username, displayName, bio, birthday }
+  { id, username, displayName, bio, birthday }
 """
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 def _to_public(doc: dict) -> dict:
     """Shape a DB doc into the public.schema.json response."""
     return {
+        "id": doc["_id"],
         "username": doc["username"],
         "displayName": doc["displayName"],
         "bio": doc.get("bio"),
@@ -32,6 +33,7 @@ def _to_public(doc: dict) -> dict:
 def _to_private(doc: dict) -> dict:
     """Shape a DB doc into the private.schema.json response."""
     return {
+        "id": doc["_id"],
         "username": doc["username"],
         "displayName": doc["displayName"],
         "bio": doc.get("bio"),

@@ -1,11 +1,16 @@
 services:
   mongodb:
     image: mongo:7
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--setParameter", "maxTransactionLockRequestTimeoutMillis=10000"]
     healthcheck:
-      test: mongosh --eval "db.runCommand('ping').ok" --quiet
+      test: >
+        mongosh --eval "
+          try { rs.status().ok }
+          catch(e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongodb:27017'}]}); }
+        " --quiet
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
 
   mongo-express:
     image: mongo-express:1
@@ -35,7 +40,7 @@ services:
       context: ../profile-service
       dockerfile: Dockerfile
     environment:
-      MONGO_URI: mongodb://mongodb:27017
+      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
       MONGO_DB: ironguild_test
     depends_on:
       mongodb:

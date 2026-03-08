@@ -35,6 +35,10 @@ async def close_client():
 # Map of service prefix → base URL
 SERVICE_MAP: dict[str, str] = {
     "profile": PROFILE_SERVICE_URL,
+    "posts": PROFILE_SERVICE_URL,
+    "follows": PROFILE_SERVICE_URL,
+    "feed": PROFILE_SERVICE_URL,
+    "events": PROFILE_SERVICE_URL,
 }
 
 
@@ -44,6 +48,7 @@ async def forward_request(
     method: str,
     headers: dict[str, str],
     body: bytes | None = None,
+    query_string: str = "",
 ) -> httpx.Response:
     """
     Forward an HTTP request to a backend service.
@@ -51,9 +56,10 @@ async def forward_request(
     Args:
         service: Service name (e.g. "profile") — used to look up the base URL.
         path: The remaining path after the service prefix (e.g. "" or "/ironwarrior").
-        method: HTTP method (GET, POST, PATCH, DELETE).
+        method: HTTP method (GET, POST, PATCH, DELETE, PUT).
         headers: Headers to forward (including X-User-Id).
-        body: Raw request body bytes (for POST/PATCH).
+        body: Raw request body bytes (for POST/PATCH/PUT).
+        query_string: Raw query string to append to the URL.
 
     Returns:
         The httpx.Response from the backend service.
@@ -66,6 +72,8 @@ async def forward_request(
         raise ValueError(f"Unknown service: {service}")
 
     url = f"{base_url}/{service}{path}"
+    if query_string:
+        url = f"{url}?{query_string}"
 
     # Only forward relevant headers — drop hop-by-hop headers
     forward_headers = {

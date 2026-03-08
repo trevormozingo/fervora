@@ -4,6 +4,9 @@
   "description": "Full profile view for the authenticated owner. Includes all fields.",
   "type": "object",
   "properties": {
+    "id": {
+      "$ref": "base.schema.json#/properties/id"
+    },
     "username": {
       "$ref": "base.schema.json#/properties/username"
     },
@@ -17,6 +20,6 @@
       "$ref": "base.schema.json#/properties/birthday"
     }
   },
-  "required": ["username", "displayName"],
+  "required": ["id", "username", "displayName"],
   "additionalProperties": false
 }
