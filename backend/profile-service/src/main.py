@@ -14,6 +14,7 @@ from .follow_routes import router as follow_router
 from .feed_routes import router as feed_router
 from .reaction_routes import router as reaction_router
 from .comment_routes import router as comment_router
+from .event_routes import router as event_router
 
 
 @asynccontextmanager
@@ -37,6 +38,7 @@ app.include_router(follow_router)
 app.include_router(feed_router)
 app.include_router(reaction_router)
 app.include_router(comment_router)
+app.include_router(event_router)
 
 
 @app.get("/health")

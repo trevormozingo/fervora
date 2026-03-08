@@ -33,6 +33,8 @@ async def connect(mongo_uri: str, db_name: str = "ironguild") -> None:
     await _db.reactions.create_index("uid")
     await _db.comments.create_index([("postId", 1), ("createdAt", 1)])
     await _db.comments.create_index("authorUid")
+    await _db.events.create_index([("creatorUid", 1), ("startTime", 1)])
+    await _db.events.create_index("invitees.uid")
 
 
 async def disconnect() -> None:
@@ -116,6 +118,14 @@ async def delete_profile(uid: str) -> bool:
                 await _comments().delete_many(
                     {"postId": {"$in": post_ids}}, session=session
                 )
+            # Remove events created by this user
+            await _events().delete_many({"creatorUid": uid}, session=session)
+            # Remove this user from invitee lists on other events
+            await _events().update_many(
+                {"invitees.uid": uid},
+                {"$pull": {"invitees": {"uid": uid}}},
+                session=session,
+            )
             return True
 
 
@@ -415,3 +425,93 @@ async def get_comments(
             pass
     comments_cursor = _comments().find(query).sort("_id", 1).limit(limit)
     return [doc async for doc in comments_cursor]
+
+
+# ── Events ──────────────────────────────────────────────────────────────
+
+
+def _events():
+    if _db is None:
+        raise RuntimeError("Database not connected")
+    return _db.events
+
+
+async def create_event(
+    uid: str, data: dict[str, Any]
+) -> dict[str, Any] | None:
+    """
+    Create an event. Requires a profile.
+    Converts inviteeUids to invitees with status=pending.
+    """
+    async with await _client.start_session() as session:
+        async with session.start_transaction():
+            profile = await _profiles().find_one({"_id": uid}, session=session)
+            if profile is None:
+                return None
+
+            invitee_uids = data.get("inviteeUids", []) or []
+            invitees = [{"uid": u, "status": "pending"} for u in invitee_uids]
+
+            doc = {
+                "creatorUid": uid,
+                "title": data["title"],
+                "description": data.get("description"),
+                "location": data.get("location"),
+                "startTime": data["startTime"],
+                "endTime": data.get("endTime"),
+                "rrule": data.get("rrule"),
+                "invitees": invitees,
+            }
+            result = await _events().insert_one(doc, session=session)
+            doc["_id"] = result.inserted_id
+            return doc
+
+
+async def get_event(event_id: str) -> dict[str, Any] | None:
+    """Get a single event by ID."""
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        return None
+    return await _events().find_one({"_id": oid})
+
+
+async def get_user_events(uid: str) -> list[dict[str, Any]]:
+    """Get events created by a user, sorted by startTime."""
+    cursor = _events().find({"creatorUid": uid}).sort("startTime", 1)
+    return [doc async for doc in cursor]
+
+
+async def get_invited_events(uid: str) -> list[dict[str, Any]]:
+    """Get events a user is invited to, sorted by startTime."""
+    cursor = _events().find({"invitees.uid": uid}).sort("startTime", 1)
+    return [doc async for doc in cursor]
+
+
+async def delete_event(event_id: str, uid: str) -> bool:
+    """Delete an event. Only the creator can delete."""
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        return False
+    result = await _events().delete_one({"_id": oid, "creatorUid": uid})
+    return result.deleted_count > 0
+
+
+async def rsvp_event(
+    event_id: str, uid: str, status: str
+) -> dict[str, Any] | None:
+    """
+    Set RSVP status for a user on an event.
+    Returns updated event or None if not found/not invited.
+    """
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        return None
+    result = await _events().find_one_and_update(
+        {"_id": oid, "invitees.uid": uid},
+        {"$set": {"invitees.$.status": status}},
+        return_document=True,
+    )
+    return result

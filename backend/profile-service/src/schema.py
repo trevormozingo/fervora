@@ -38,6 +38,7 @@ _profile_resolver = _build_dir_resolver("profile")
 _post_resolver = _build_dir_resolver("post")
 _reaction_resolver = _build_dir_resolver("reaction")
 _comment_resolver = _build_dir_resolver("comment")
+_event_resolver = _build_dir_resolver("event")
 
 VALIDATORS = {
     "create": Draft7Validator(
@@ -63,6 +64,16 @@ VALIDATORS = {
     "comment_create": Draft7Validator(
         _load_schema("comment/create.schema.json"),
         resolver=_comment_resolver,
+        format_checker=_format_checker,
+    ),
+    "event_create": Draft7Validator(
+        _load_schema("event/create.schema.json"),
+        resolver=_event_resolver,
+        format_checker=_format_checker,
+    ),
+    "event_rsvp": Draft7Validator(
+        _load_schema("event/rsvp.schema.json"),
+        resolver=_event_resolver,
         format_checker=_format_checker,
     ),
 }

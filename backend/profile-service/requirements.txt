@@ -2,3 +2,4 @@ fastapi>=0.115.0
 uvicorn>=0.30.0
 motor>=3.6.0
 jsonschema[format]>=4.23.0
+icalendar>=6.0.0

@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir pytest requests pymongo
+RUN pip install --no-cache-dir pytest requests pymongo icalendar
 
 COPY tests/ ./tests/
 
