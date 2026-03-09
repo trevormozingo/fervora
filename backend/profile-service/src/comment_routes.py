@@ -18,6 +18,7 @@ def _to_response(doc: dict) -> dict:
         "id": str(doc["_id"]),
         "postId": str(doc["postId"]),
         "authorUid": doc["authorUid"],
+        "authorUsername": doc.get("authorUsername", doc["authorUid"]),
         "body": doc["body"],
         "createdAt": doc["createdAt"],
     }

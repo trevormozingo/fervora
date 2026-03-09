@@ -14,9 +14,10 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 
 def _to_post(doc: dict) -> dict:
     """Shape a DB post doc into the base.schema.json response."""
-    return {
+    resp = {
         "id": str(doc["_id"]),
         "authorUid": doc["authorUid"],
+        "authorUsername": doc.get("authorUsername"),
         "title": doc.get("title"),
         "body": doc.get("body"),
         "media": doc.get("media"),
@@ -24,6 +25,15 @@ def _to_post(doc: dict) -> dict:
         "bodyMetrics": doc.get("bodyMetrics"),
         "createdAt": doc["createdAt"],
     }
+    if "reactionSummary" in doc:
+        resp["reactionSummary"] = doc["reactionSummary"]
+    if "recentComments" in doc:
+        resp["recentComments"] = doc["recentComments"]
+    if "commentCount" in doc:
+        resp["commentCount"] = doc["commentCount"]
+    if "myReaction" in doc:
+        resp["myReaction"] = doc["myReaction"]
+    return resp
 
 
 @router.get("")

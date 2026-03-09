@@ -17,7 +17,7 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 
 def _to_response(doc: dict) -> dict:
     """Shape a DB doc into the base.schema.json response."""
-    return {
+    resp = {
         "id": str(doc["_id"]),
         "authorUid": doc["authorUid"],
         "title": doc.get("title"),
@@ -27,6 +27,16 @@ def _to_response(doc: dict) -> dict:
         "bodyMetrics": doc.get("bodyMetrics"),
         "createdAt": doc["createdAt"],
     }
+    # Enrichment fields (present on list queries)
+    if "reactionSummary" in doc:
+        resp["reactionSummary"] = doc["reactionSummary"]
+    if "recentComments" in doc:
+        resp["recentComments"] = doc["recentComments"]
+    if "commentCount" in doc:
+        resp["commentCount"] = doc["commentCount"]
+    if "myReaction" in doc:
+        resp["myReaction"] = doc["myReaction"]
+    return resp
 
 
 @router.get("")

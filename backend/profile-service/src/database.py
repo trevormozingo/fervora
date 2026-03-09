@@ -193,7 +193,8 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
 async def get_user_posts(
     uid: str, *, limit: int = 20, cursor: str | None = None
 ) -> list[dict[str, Any]]:
-    """Return posts authored by *uid*, newest first, with cursor pagination."""
+    """Return posts authored by *uid*, newest first, with cursor pagination.
+    Each post is enriched with reaction counts and recent comments."""
     query: dict[str, Any] = {"authorUid": uid}
     if cursor:
         query["createdAt"] = {"$lt": cursor}
@@ -203,7 +204,74 @@ async def get_user_posts(
         .sort("createdAt", -1)
         .limit(limit)
     )
-    return [doc async for doc in docs]
+    posts = [doc async for doc in docs]
+    await _enrich_posts(posts, viewer_uid=uid)
+    return posts
+
+
+async def _enrich_posts(posts: list[dict[str, Any]], viewer_uid: str | None = None) -> None:
+    """Attach reactionSummary, myReaction, and recentComments to each post in-place."""
+    if not posts:
+        return
+
+    post_ids = [doc["_id"] for doc in posts]
+
+    # Aggregate reactions: group by postId + type → count
+    reaction_pipeline = [
+        {"$match": {"postId": {"$in": post_ids}}},
+        {"$group": {"_id": {"postId": "$postId", "type": "$type"}, "count": {"$sum": 1}}},
+    ]
+    reaction_map: dict[Any, dict[str, int]] = {}
+    async for r in _reactions().aggregate(reaction_pipeline):
+        pid = r["_id"]["postId"]
+        rtype = r["_id"]["type"]
+        reaction_map.setdefault(pid, {})[rtype] = r["count"]
+
+    # Get viewer's own reaction per post
+    my_reaction_map: dict[Any, str] = {}
+    if viewer_uid:
+        my_cursor = _reactions().find(
+            {"postId": {"$in": post_ids}, "uid": viewer_uid},
+            {"postId": 1, "type": 1, "_id": 0},
+        )
+        async for mr in my_cursor:
+            my_reaction_map[mr["postId"]] = mr["type"]
+
+    # Fetch recent comments (newest 3 per post)
+    comment_pipeline = [
+        {"$match": {"postId": {"$in": post_ids}}},
+        {"$sort": {"_id": -1}},
+        {"$group": {
+            "_id": "$postId",
+            "comments": {"$push": {
+                "id": {"$toString": "$_id"},
+                "authorUid": "$authorUid",
+                "authorUsername": {"$ifNull": ["$authorUsername", "$authorUid"]},
+                "body": "$body",
+                "createdAt": "$createdAt",
+            }},
+        }},
+        {"$project": {"comments": {"$slice": ["$comments", 3]}}},
+    ]
+    comment_map: dict[Any, list[dict]] = {}
+    async for c in _comments().aggregate(comment_pipeline):
+        comment_map[c["_id"]] = c["comments"]
+
+    # Comment counts
+    count_pipeline = [
+        {"$match": {"postId": {"$in": post_ids}}},
+        {"$group": {"_id": "$postId", "count": {"$sum": 1}}},
+    ]
+    comment_count_map: dict[Any, int] = {}
+    async for cc in _comments().aggregate(count_pipeline):
+        comment_count_map[cc["_id"]] = cc["count"]
+
+    for doc in posts:
+        pid = doc["_id"]
+        doc["reactionSummary"] = reaction_map.get(pid, {})
+        doc["myReaction"] = my_reaction_map.get(pid)
+        doc["recentComments"] = comment_map.get(pid, [])
+        doc["commentCount"] = comment_count_map.get(pid, 0)
 
 
 async def delete_post(post_id: str, uid: str) -> bool:
@@ -306,7 +374,8 @@ async def get_feed(
     """
     Get feed entries for a user, newest first.
     Cursor-based pagination using createdAt.
-    Returns post documents (not feed pointer docs).
+    Returns post documents (not feed pointer docs), enriched with
+    reactions and comments.
     """
     query: dict[str, Any] = {"ownerUid": uid}
     if cursor:
@@ -325,7 +394,21 @@ async def get_feed(
     posts_by_id = {doc["_id"]: doc async for doc in posts_cursor}
 
     # Return in feed order, skip any posts that were somehow deleted
-    return [posts_by_id[pid] for pid in post_ids if pid in posts_by_id]
+    posts = [posts_by_id[pid] for pid in post_ids if pid in posts_by_id]
+
+    # Resolve author usernames
+    author_uids = list({p["authorUid"] for p in posts})
+    profiles_cursor = _profiles().find(
+        {"_id": {"$in": author_uids}}, {"_id": 1, "username": 1}
+    )
+    username_map: dict[str, str] = {}
+    async for prof in profiles_cursor:
+        username_map[prof["_id"]] = prof.get("username", prof["_id"])
+    for p in posts:
+        p["authorUsername"] = username_map.get(p["authorUid"], p["authorUid"])
+
+    await _enrich_posts(posts, viewer_uid=uid)
+    return posts
 
 
 # ── Reactions ─────────────────────────────────────────────────────────
@@ -428,6 +511,7 @@ async def create_comment(
             doc = {
                 "postId": oid,
                 "authorUid": uid,
+                "authorUsername": profile.get("username", uid),
                 "body": data["body"],
                 "createdAt": now,
             }

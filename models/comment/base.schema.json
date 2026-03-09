@@ -16,6 +16,10 @@
       "type": "string",
       "description": "Firebase UID of the comment author"
     },
+    "authorUsername": {
+      "type": "string",
+      "description": "Username of the comment author (resolved from profile)"
+    },
     "body": {
       "type": "string",
       "minLength": 1,

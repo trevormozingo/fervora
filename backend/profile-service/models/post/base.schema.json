@@ -111,6 +111,30 @@
       "type": "string",
       "format": "date-time",
       "description": "When the post was created"
+    },
+    "reactionSummary": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Map of reaction type to count"
+    },
+    "recentComments": {
+      "type": "array",
+      "items": {
+        "$ref": "../comment/base.schema.json"
+      },
+      "description": "Most recent comments on this post (up to 3)"
+    },
+    "commentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of comments on this post"
+    },
+    "myReaction": {
+      "type": ["string", "null"],
+      "description": "The current viewer's reaction type, or null if none"
     }
   },
   "additionalProperties": false
