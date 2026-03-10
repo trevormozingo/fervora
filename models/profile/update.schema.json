@@ -12,6 +12,9 @@
     },
     "birthday": {
       "$ref": "base.schema.json#/properties/birthday"
+    },
+    "profilePhoto": {
+      "$ref": "base.schema.json#/properties/profilePhoto"
     }
   },
   "minProperties": 1,

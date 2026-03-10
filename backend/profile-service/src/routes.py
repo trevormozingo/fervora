@@ -27,6 +27,7 @@ def _to_public(doc: dict) -> dict:
         "displayName": doc["displayName"],
         "bio": doc.get("bio"),
         "birthday": doc.get("birthday"),
+        "profilePhoto": doc.get("profilePhoto"),
     }
 
 
@@ -38,6 +39,7 @@ def _to_private(doc: dict) -> dict:
         "displayName": doc["displayName"],
         "bio": doc.get("bio"),
         "birthday": doc.get("birthday"),
+        "profilePhoto": doc.get("profilePhoto"),
     }
 
 

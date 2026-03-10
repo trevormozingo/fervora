@@ -2,7 +2,7 @@
 # Start the emulator in the background, wait for it to be ready,
 # then seed test phone numbers.
 
-firebase emulators:start --only auth --project ironguild-local &
+firebase emulators:start --only auth,storage --project ironguild-local &
 EMULATOR_PID=$!
 
 # Wait for emulator to be ready

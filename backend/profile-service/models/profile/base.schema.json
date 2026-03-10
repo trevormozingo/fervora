@@ -32,6 +32,12 @@
       "format": "date",
       "default": null,
       "description": "User's date of birth (YYYY-MM-DD)"
+    },
+    "profilePhoto": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "default": null,
+      "description": "URL to the user's profile photo in Firebase Storage"
     }
   },
   "additionalProperties": false

@@ -1,0 +1,1 @@
+docker compose -f backend/api-gateway/docker-compose.yaml down
