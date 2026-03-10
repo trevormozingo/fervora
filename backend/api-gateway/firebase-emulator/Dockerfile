@@ -32,7 +32,7 @@ RUN echo '{ \
   } \
 }' > firebase.json
 
-RUN printf 'rules_version = "2";\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /users/{userId}/{allPaths=**} {\n      allow read: if request.auth != null;\n      allow write: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}\n' > storage.rules
+COPY storage.rules /app/storage.rules
 
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
