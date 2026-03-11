@@ -3,7 +3,9 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressa
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { GradientScreen, SchemaForm, Text, colors, spacing } from '@/components/ui';
+import { LocationPicker } from '@/components/LocationPicker';
 import { UpdateProfileSchema, UpdateProfileFields } from '@/models/profile';
 import { getIdToken } from '@/services/auth';
 import { uploadProfilePhoto } from '@/services/storage';
@@ -16,6 +18,10 @@ export default function EditProfileScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [locationCoords, setLocationCoords] = useState<[number, number] | null>(null);
+  const [locatingUser, setLocatingUser] = useState(false);
+  const [mapPickerVisible, setMapPickerVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -33,6 +39,10 @@ export default function EditProfileScreen() {
           });
           if (profile.profilePhoto) {
             setExistingPhotoUrl(profile.profilePhoto);
+          }
+          if (profile.location) {
+            setLocationCoords(profile.location.coordinates);
+            setLocationLabel(profile.location.label ?? null);
           }
         }
       } catch {
@@ -56,6 +66,29 @@ export default function EditProfileScreen() {
     }
   };
 
+  const setMyLocation = async () => {
+    try {
+      setLocatingUser(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Enable location permissions in Settings to use this feature.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+      setLocationCoords(coords);
+
+      // Reverse geocode to get a city name
+      const [geo] = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      const label = geo ? [geo.city, geo.region].filter(Boolean).join(', ') : null;
+      setLocationLabel(label);
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Could not get location');
+    } finally {
+      setLocatingUser(false);
+    }
+  };
+
   const handleSubmit = async (data: Record<string, unknown>) => {
     try {
       const token = getIdToken();
@@ -71,7 +104,16 @@ export default function EditProfileScreen() {
         // Backend already persisted the URL on the profile doc
       }
 
-      const payload = { ...data };
+      const payload: Record<string, unknown> = { ...data };
+
+      // Include location if set
+      if (locationCoords) {
+        payload.location = {
+          type: 'Point',
+          coordinates: locationCoords,
+          label: locationLabel,
+        };
+      }
 
       const res = await fetch(`${config.apiBaseUrl}/profile`, {
         method: 'PATCH',
@@ -145,6 +187,36 @@ export default function EditProfileScreen() {
           </View>
         )}
 
+        {/* Location */}
+        <View style={styles.locationSection}>
+          <Text style={styles.locationLabel}>Location</Text>
+          <View style={styles.locationRow}>
+            {locationLabel ? (
+              <View style={styles.locationDisplay}>
+                <Ionicons name="location" size={16} color={colors.primary} />
+                <Text style={styles.locationText}>{locationLabel}</Text>
+              </View>
+            ) : (
+              <Text muted style={styles.locationText}>Not set</Text>
+            )}
+            <View style={styles.locationButtons}>
+              <Pressable onPress={setMyLocation} style={styles.locationButton} disabled={locatingUser}>
+                {locatingUser ? (
+                  <ActivityIndicator size="small" color={colors.primaryForeground} />
+                ) : (
+                  <Text style={styles.locationButtonText}>
+                    {locationLabel ? 'Update' : 'Use GPS'}
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable onPress={() => setMapPickerVisible(true)} style={[styles.locationButton, styles.mapButton]}>
+                <Ionicons name="map-outline" size={14} color={colors.primaryForeground} />
+                <Text style={styles.locationButtonText}>Map</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
         <SchemaForm
           fields={UpdateProfileFields}
           schema={UpdateProfileSchema}
@@ -153,6 +225,17 @@ export default function EditProfileScreen() {
           initialValues={initialValues ?? undefined}
         />
       </KeyboardAvoidingView>
+
+      <LocationPicker
+        visible={mapPickerVisible}
+        onClose={() => setMapPickerVisible(false)}
+        initialCoords={locationCoords}
+        onSelect={(loc) => {
+          setLocationCoords(loc.coordinates);
+          setLocationLabel(loc.label);
+          setMapPickerVisible(false);
+        }}
+      />
     </GradientScreen>
   );
 }
@@ -231,5 +314,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
+  },
+  locationSection: {
+    marginBottom: spacing.md,
+  },
+  locationLabel: {
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationButtons: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  locationDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  locationText: {
+    fontSize: 14,
+  },
+  locationButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  locationButtonText: {
+    color: colors.primaryForeground,
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

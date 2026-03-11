@@ -38,6 +38,30 @@
       "format": "uri",
       "default": null,
       "description": "URL to the user's profile photo in Firebase Storage"
+    },
+    "location": {
+      "type": ["object", "null"],
+      "default": null,
+      "description": "User's geolocation for nearby search",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["Point"],
+          "default": "Point"
+        },
+        "coordinates": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[longitude, latitude]"
+        },
+        "label": {
+          "type": ["string", "null"],
+          "description": "Human-readable location name (e.g. city)"
+        }
+      },
+      "required": ["type", "coordinates"]
     }
   },
   "additionalProperties": false

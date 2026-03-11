@@ -14,6 +14,11 @@ export type ProfileData = {
   bio?: string | null;
   birthday?: string | null;
   profilePhoto?: string | null;
+  location?: {
+    type: string;
+    coordinates: [number, number];
+    label?: string | null;
+  } | null;
 };
 
 type Props = {
@@ -166,6 +171,12 @@ export function ProfileView({
                 </Pressable>
               </View>
               {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+              {profile.location?.label && (
+                <View style={styles.locationRow}>
+                  <Ionicons name="location-outline" size={14} color={colors.mutedForeground} />
+                  <Text muted style={styles.locationText}>{profile.location.label}</Text>
+                </View>
+              )}
             </>
           ) : (
             <Text muted>Could not load profile.</Text>
@@ -229,6 +240,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  locationText: {
+    fontSize: 13,
   },
   followRow: {
     flexDirection: 'row',

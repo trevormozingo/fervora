@@ -15,6 +15,9 @@
     },
     "profilePhoto": {
       "$ref": "base.schema.json#/properties/profilePhoto"
+    },
+    "location": {
+      "$ref": "base.schema.json#/properties/location"
     }
   },
   "minProperties": 1,

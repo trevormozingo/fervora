@@ -5,11 +5,12 @@ Response shapes match public.schema.json and private.schema.json exactly:
   { id, username, displayName, bio, birthday }
 """
 
-from fastapi import APIRouter, Header, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Header, HTTPException, Query, Request, UploadFile, File
 
 from .database import (
     create_profile,
     delete_profile,
+    get_nearby_profiles,
     get_profile_by_id,
     get_profile_by_username,
     update_profile,
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 def _to_public(doc: dict) -> dict:
     """Shape a DB doc into the public.schema.json response."""
-    return {
+    resp = {
         "id": doc["_id"],
         "username": doc["username"],
         "displayName": doc["displayName"],
@@ -30,11 +31,14 @@ def _to_public(doc: dict) -> dict:
         "birthday": doc.get("birthday"),
         "profilePhoto": doc.get("profilePhoto"),
     }
+    if doc.get("location"):
+        resp["location"] = doc["location"]
+    return resp
 
 
 def _to_private(doc: dict) -> dict:
     """Shape a DB doc into the private.schema.json response."""
-    return {
+    resp = {
         "id": doc["_id"],
         "username": doc["username"],
         "displayName": doc["displayName"],
@@ -42,6 +46,9 @@ def _to_private(doc: dict) -> dict:
         "birthday": doc.get("birthday"),
         "profilePhoto": doc.get("profilePhoto"),
     }
+    if doc.get("location"):
+        resp["location"] = doc["location"]
+    return resp
 
 
 @router.post("", status_code=201)
@@ -63,6 +70,19 @@ async def get_own(x_user_id: str = Header(...)):
     if not doc:
         raise HTTPException(status_code=404, detail="Profile not found")
     return _to_private(doc)
+
+
+@router.get("/nearby")
+async def nearby(
+    x_user_id: str = Header(...),
+    lng: float = Query(..., description="Longitude"),
+    lat: float = Query(..., description="Latitude"),
+    radius: float = Query(default=50, ge=1, le=500, description="Radius in km"),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    """Find profiles near a coordinate. Excludes the requesting user."""
+    docs = await get_nearby_profiles(lng, lat, radius_km=radius, limit=limit, exclude_uid=x_user_id)
+    return {"items": [_to_public(d) for d in docs], "count": len(docs)}
 
 
 @router.get("/{username}")

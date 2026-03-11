@@ -35,6 +35,7 @@ async def connect(mongo_uri: str, db_name: str = "ironguild") -> None:
     await _db.comments.create_index("authorUid")
     await _db.events.create_index([("authorUid", 1), ("startTime", 1)])
     await _db.events.create_index("invitees.uid")
+    await _db.profiles.create_index([("location", "2dsphere")])
 
 
 async def disconnect() -> None:
@@ -62,6 +63,7 @@ async def create_profile(uid: str, data: dict[str, Any]) -> dict[str, Any]:
         "displayName": data.get("displayName", data["username"]),
         "bio": None,
         "birthday": None,
+        "location": None,
     }
     await _profiles().insert_one(doc)
     return doc
@@ -82,6 +84,27 @@ async def update_profile(uid: str, data: dict[str, Any]) -> dict[str, Any] | Non
         {"$set": data},
         return_document=True,
     )
+
+
+async def get_nearby_profiles(
+    lng: float, lat: float, radius_km: float = 50, limit: int = 50, exclude_uid: str | None = None
+) -> list[dict[str, Any]]:
+    """
+    Find profiles within `radius_km` kilometres of (lng, lat).
+    Uses MongoDB $nearSphere + 2dsphere index.
+    """
+    query: dict[str, Any] = {
+        "location": {
+            "$nearSphere": {
+                "$geometry": {"type": "Point", "coordinates": [lng, lat]},
+                "$maxDistance": radius_km * 1000,  # metres
+            }
+        }
+    }
+    if exclude_uid:
+        query["_id"] = {"$ne": exclude_uid}
+    cursor = _profiles().find(query).limit(limit)
+    return [doc async for doc in cursor]
 
 
 async def delete_profile(uid: str) -> bool:
