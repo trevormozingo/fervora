@@ -464,7 +464,7 @@ const s = StyleSheet.create({
 
   // Date modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 34 },
+  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 0, borderTopRightRadius: 0, paddingBottom: 34 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,

@@ -26,6 +26,8 @@ def _to_post(doc: dict) -> dict:
         "bodyMetrics": doc.get("bodyMetrics"),
         "createdAt": doc["createdAt"],
     }
+    if "feedCreatedAt" in doc:
+        resp["feedCreatedAt"] = doc["feedCreatedAt"]
     if "reactionSummary" in doc:
         resp["reactionSummary"] = doc["reactionSummary"]
     if "recentComments" in doc:
@@ -45,5 +47,5 @@ async def feed(
 ):
     posts = await get_feed(x_user_id, limit=limit, cursor=cursor)
     items = [_to_post(p) for p in posts]
-    next_cursor = items[-1]["createdAt"] if items else None
+    next_cursor = items[-1]["feedCreatedAt"] if items else None
     return {"items": items, "count": len(items), "cursor": next_cursor}

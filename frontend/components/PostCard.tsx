@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Image, Modal, NativeScrollEvent, NativeSyntheticEvent, PanResponder, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, colors, spacing, radii, fontSizes, fonts } from '@/components/ui';
 import { activityLabel, type ActivityType } from '@/models/post';
@@ -41,6 +42,30 @@ export type Post = {
   commentCount?: number;
   myReaction?: string | null;
   createdAt: string;
+};
+
+// ── Activity icon mapping ────────────────────────────────────────────
+
+const ACTIVITY_ICON: Record<string, string> = {
+  running: 'walk-outline',
+  cycling: 'bicycle-outline',
+  swimming: 'water-outline',
+  weightlifting: 'barbell-outline',
+  crossfit: 'flame-outline',
+  yoga: 'leaf-outline',
+  pilates: 'body-outline',
+  hiking: 'trail-sign-outline',
+  rowing: 'boat-outline',
+  boxing: 'hand-left-outline',
+  martial_arts: 'hand-left-outline',
+  climbing: 'trending-up-outline',
+  dance: 'musical-notes-outline',
+  stretching: 'body-outline',
+  cardio: 'heart-outline',
+  hiit: 'flash-outline',
+  walking: 'footsteps-outline',
+  sports: 'football-outline',
+  other: 'fitness-outline',
 };
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -341,8 +366,6 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const [carouselWidth, setCarouselWidth] = useState(0);
 
   const isOwner = post.authorUid === getUid();
 
@@ -562,46 +585,91 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
         )}
       </View>
 
-      {/* Media — swipeable carousel */}
-      {post.media && post.media.length > 0 && (
-        <View
-          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+      {/* ── Workout hero ── */}
+      {post.workout && (
+        <LinearGradient
+          colors={[colors.brandPurple, colors.brandPink, colors.brandRed]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.workoutHero}
         >
-          {carouselWidth > 0 && (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / carouselWidth);
-                setActiveMediaIndex(idx);
-              }}
-              style={styles.mediaCarousel}
-            >
-              {post.media.map((m, i) => (
-                <Pressable key={i} onPress={() => { setLightboxIndex(i); setLightboxUri(m.url); }}>
-                  <Image
-                    source={{ uri: m.url }}
-                    style={[styles.mediaCard, { width: carouselWidth }]}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-          {post.media.length > 1 && (
-            <View style={styles.mediaDots}>
-              {post.media.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.mediaDot,
-                    i === activeMediaIndex && styles.mediaDotActive,
-                  ]}
-                />
-              ))}
+          <View style={styles.workoutHeaderRow}>
+            <View style={styles.workoutIconCircle}>
+              <Ionicons name={(ACTIVITY_ICON[post.workout.activityType] ?? 'fitness-outline') as any} size={20} color={colors.primaryForeground} />
+            </View>
+            <Text style={styles.workoutActivity}>{activityLabel(post.workout.activityType)}</Text>
+          </View>
+          {(post.workout.durationSeconds || post.workout.caloriesBurned) && (
+            <View style={styles.workoutStats}>
+              {post.workout.durationSeconds != null && (
+                <View style={styles.workoutStat}>
+                  <Text style={styles.workoutStatValue}>{Math.round(post.workout.durationSeconds / 60)}</Text>
+                  <Text style={styles.workoutStatLabel}>min</Text>
+                </View>
+              )}
+              {post.workout.durationSeconds != null && post.workout.caloriesBurned != null && (
+                <View style={styles.workoutStatDivider} />
+              )}
+              {post.workout.caloriesBurned != null && (
+                <View style={styles.workoutStat}>
+                  <Text style={styles.workoutStatValue}>{post.workout.caloriesBurned}</Text>
+                  <Text style={styles.workoutStatLabel}>cal</Text>
+                </View>
+              )}
             </View>
           )}
+        </LinearGradient>
+      )}
+
+      {/* ── Body Metrics ── */}
+      {post.bodyMetrics && (
+        <View style={styles.metricsRow}>
+          <Ionicons name="body-outline" size={16} color={colors.primary} />
+          {post.bodyMetrics.weightLbs != null && (
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>{post.bodyMetrics.weightLbs}</Text>
+              <Text style={styles.metricLabel}>lbs</Text>
+            </View>
+          )}
+          {post.bodyMetrics.weightLbs != null && post.bodyMetrics.bodyFatPercentage != null && (
+            <View style={styles.metricDivider} />
+          )}
+          {post.bodyMetrics.bodyFatPercentage != null && (
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>{post.bodyMetrics.bodyFatPercentage}%</Text>
+              <Text style={styles.metricLabel}>body fat</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Title */}
+      {post.title && <Text style={styles.title}>{post.title}</Text>}
+
+      {/* Body */}
+      {post.body && <Text style={styles.body} numberOfLines={4}>{post.body}</Text>}
+
+      {/* Media — compact thumbnails */}
+      {post.media && post.media.length > 0 && (
+        <View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.mediaStrip}
+          >
+            {post.media.map((m, i) => (
+              <Pressable key={i} onPress={() => { setLightboxIndex(i); setLightboxUri(m.url); }}>
+                <Image
+                  source={{ uri: m.url }}
+                  style={[
+                    styles.mediaThumb,
+                    post.media!.length === 1 && styles.mediaThumbSingle,
+                  ]}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -611,36 +679,6 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
           <LightboxViewer images={post.media} initialIndex={lightboxIndex} onClose={() => setLightboxUri(null)} />
         )}
       </Modal>
-
-      {/* Title */}
-      {post.title && <Text style={styles.title}>{post.title}</Text>}
-
-      {/* Body */}
-      {post.body && <Text style={styles.body} numberOfLines={4}>{post.body}</Text>}
-
-      {/* Workout */}
-      {post.workout && (
-        <View style={styles.tag}>
-          <Ionicons name="barbell-outline" size={14} color={colors.primary} />
-          <Text style={styles.tagText}>
-            {activityLabel(post.workout.activityType)}
-            {post.workout.durationSeconds ? ` · ${Math.round(post.workout.durationSeconds / 60)} min` : ''}
-            {post.workout.caloriesBurned ? ` · ${post.workout.caloriesBurned} cal` : ''}
-          </Text>
-        </View>
-      )}
-
-      {/* Body Metrics */}
-      {post.bodyMetrics && (
-        <View style={styles.tag}>
-          <Ionicons name="body-outline" size={14} color={colors.primary} />
-          <Text style={styles.tagText}>
-            {post.bodyMetrics.weightLbs ? `${post.bodyMetrics.weightLbs} lbs` : ''}
-            {post.bodyMetrics.weightLbs && post.bodyMetrics.bodyFatPercentage ? ' · ' : ''}
-            {post.bodyMetrics.bodyFatPercentage ? `${post.bodyMetrics.bodyFatPercentage}% BF` : ''}
-          </Text>
-        </View>
-      )}
 
       {/* Date */}
       <Text muted style={styles.date}>{formatDate(post.createdAt)}</Text>
@@ -885,30 +923,19 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     ...fonts.medium,
   },
-  mediaCarousel: {
-    borderRadius: radii.md,
-    overflow: 'hidden',
-  },
-  mediaCard: {
-    height: 220,
-    borderRadius: radii.md,
-    backgroundColor: colors.border,
-  },
-  mediaDots: {
+  mediaStrip: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: spacing.xs,
+    gap: spacing.sm,
   },
-  mediaDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+  mediaThumb: {
+    width: 140,
+    height: 140,
+    borderRadius: radii.md,
     backgroundColor: colors.border,
   },
-  mediaDotActive: {
-    backgroundColor: colors.primary,
-    width: 18,
+  mediaThumbSingle: {
+    width: 240,
+    height: 180,
   },
   lightboxBackdrop: {
     flex: 1,
@@ -977,20 +1004,84 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     lineHeight: 20,
   },
-  tag: {
+  // Workout hero
+  workoutHero: {
+    borderRadius: radii.md,
+    overflow: 'hidden' as const,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  workoutHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.sm,
-    backgroundColor: colors.background,
-    alignSelf: 'flex-start',
+    gap: spacing.sm,
   },
-  tagText: {
-    fontSize: fontSizes.sm,
-    color: colors.foreground,
+  workoutIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  workoutActivity: {
+    fontSize: fontSizes.lg,
+    ...fonts.bold,
+    color: colors.primaryForeground,
+  },
+  workoutStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingTop: spacing.xs,
+  },
+  workoutStat: {
+    alignItems: 'center',
+  },
+  workoutStatValue: {
+    fontSize: 22,
+    ...fonts.bold,
+    color: colors.primaryForeground,
+  },
+  workoutStatLabel: {
+    fontSize: fontSizes.xs,
+    color: 'rgba(255,255,255,0.7)',
     ...fonts.medium,
+  },
+  workoutStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  // Body metrics
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.muted,
+  },
+  metricItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+  },
+  metricValue: {
+    fontSize: fontSizes.lg,
+    ...fonts.bold,
+    color: colors.foreground,
+  },
+  metricLabel: {
+    fontSize: fontSizes.xs,
+    color: colors.mutedForeground,
+    ...fonts.medium,
+  },
+  metricDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: colors.border,
   },
   date: {
     fontSize: fontSizes.xs,

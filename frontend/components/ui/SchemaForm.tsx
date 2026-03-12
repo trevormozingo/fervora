@@ -283,8 +283,8 @@ const dateStyles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     paddingBottom: 34, // safe area
   },
   modalHeader: {

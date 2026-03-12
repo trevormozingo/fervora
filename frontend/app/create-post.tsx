@@ -515,7 +515,7 @@ export default function CreatePostScreen() {
       <Modal
         visible={showHealthPicker}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowHealthPicker(false)}
       >
         <SafeAreaView style={styles.container}>

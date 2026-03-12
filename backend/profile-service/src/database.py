@@ -372,17 +372,48 @@ async def follow_user(follower_uid: str, following_uid: str) -> bool | None:
                     {"followerUid": follower_uid, "followingUid": following_uid},
                     session=session,
                 )
+
+                # Backfill: seed the follower's feed with the last 20 posts
+                recent_posts = _posts().find(
+                    {"authorUid": following_uid},
+                    {"_id": 1, "createdAt": 1},
+                    sort=[("createdAt", -1)],
+                    limit=20,
+                    session=session,
+                )
+                feed_docs = [
+                    {
+                        "ownerUid": follower_uid,
+                        "postId": p["_id"],
+                        "authorUid": following_uid,
+                        "createdAt": p["createdAt"],
+                    }
+                    async for p in recent_posts
+                ]
+                if feed_docs:
+                    await _feed().insert_many(feed_docs, session=session)
+
                 return True
         except DuplicateKeyError:
             return False
 
 
 async def unfollow_user(follower_uid: str, following_uid: str) -> bool:
-    """Remove a follow relationship. Returns True if deleted."""
-    result = await _follows().delete_one(
-        {"followerUid": follower_uid, "followingUid": following_uid}
-    )
-    return result.deleted_count > 0
+    """Remove a follow relationship and clean up feed entries atomically. Returns True if deleted."""
+    async with await _client.start_session() as session:
+        async with session.start_transaction():
+            result = await _follows().delete_one(
+                {"followerUid": follower_uid, "followingUid": following_uid},
+                session=session,
+            )
+            if result.deleted_count == 0:
+                return False
+            # Remove unfollowed user's posts from the follower's feed
+            await _feed().delete_many(
+                {"ownerUid": follower_uid, "authorUid": following_uid},
+                session=session,
+            )
+            return True
 
 
 async def get_following(uid: str) -> list[str]:
@@ -424,12 +455,15 @@ async def get_feed(
         query["createdAt"] = {"$lt": cursor}
 
     feed_cursor = _feed().find(
-        query, {"postId": 1, "_id": 0}
+        query, {"postId": 1, "createdAt": 1, "_id": 0}
     ).sort("createdAt", -1).limit(limit)
 
-    post_ids = [doc["postId"] async for doc in feed_cursor]
-    if not post_ids:
+    feed_entries = [(doc["postId"], doc["createdAt"]) async for doc in feed_cursor]
+    if not feed_entries:
         return []
+
+    post_ids = [pid for pid, _ in feed_entries]
+    feed_ts_by_post = {pid: ts for pid, ts in feed_entries}
 
     # Fetch the actual post documents
     posts_cursor = _posts().find({"_id": {"$in": post_ids}})
@@ -437,6 +471,10 @@ async def get_feed(
 
     # Return in feed order, skip any posts that were somehow deleted
     posts = [posts_by_id[pid] for pid in post_ids if pid in posts_by_id]
+
+    # Attach feed-level timestamp for cursor pagination
+    for p in posts:
+        p["feedCreatedAt"] = feed_ts_by_post[p["_id"]]
 
     # Resolve author usernames and profile photos
     author_uids = list({p["authorUid"] for p in posts})

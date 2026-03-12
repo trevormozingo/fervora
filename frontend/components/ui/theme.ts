@@ -10,6 +10,12 @@ export const colors = {
   primary: '#111111',
   primaryForeground: '#FFFFFF',
 
+  // Logo palette
+  brandRed: '#F5515F',
+  brandRedDark: '#9F041B',
+  brandPurple: '#622774',
+  brandPink: '#C53364',
+
   // Neutrals
   background: '#e9e9e9',
   foreground: '#111111',
