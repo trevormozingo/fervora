@@ -1,5 +1,5 @@
 /**
- * Iron Guild Design Tokens
+ * Fervora Design Tokens
  *
  * Central place for colors, typography, spacing, and radii.
  * Import from '@/components/ui' and reference via the `theme` object.

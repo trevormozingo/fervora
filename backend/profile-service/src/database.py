@@ -13,7 +13,7 @@ _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
 
 
-async def connect(mongo_uri: str, db_name: str = "ironguild") -> None:
+async def connect(mongo_uri: str, db_name: str = "fervora") -> None:
     global _client, _db
     _client = AsyncIOMotorClient(mongo_uri)
     _db = _client[db_name]

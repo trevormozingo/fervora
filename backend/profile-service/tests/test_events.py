@@ -18,7 +18,7 @@ import requests
 
 BASE = os.environ.get("SERVICE_URL", "http://localhost:8000")
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB = os.environ.get("MONGO_DB", "ironguild_test")
+MONGO_DB = os.environ.get("MONGO_DB", "fervora_test")
 
 EVENT_FIELDS = {"id", "authorUid", "title", "description", "location",
                 "startTime", "endTime", "rrule", "invitees"}

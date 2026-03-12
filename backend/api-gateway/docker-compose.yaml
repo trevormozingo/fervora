@@ -42,9 +42,9 @@ services:
       dockerfile: Dockerfile
     environment:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: ironguild_test
-      FIREBASE_PROJECT_ID: ironguild-local
-      FIREBASE_STORAGE_BUCKET: ironguild-local.appspot.com
+      MONGO_DB: fervora_test
+      FIREBASE_PROJECT_ID: fervora-local
+      FIREBASE_STORAGE_BUCKET: fervora-local.appspot.com
       STORAGE_EMULATOR_HOST: http://firebase-emulator:9199
       STORAGE_PUBLIC_HOST: http://192.168.1.16:9199
     depends_on:
@@ -66,7 +66,7 @@ services:
       - "8080:8080"
     environment:
       FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
-      FIREBASE_PROJECT_ID: ironguild-local
+      FIREBASE_PROJECT_ID: fervora-local
       PROFILE_SERVICE_URL: http://profile-service:8000
     depends_on:
       profile-service:
@@ -86,7 +86,7 @@ services:
     environment:
       GATEWAY_URL: http://api-gateway:8080
       FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
-      FIREBASE_PROJECT_ID: ironguild-local
+      FIREBASE_PROJECT_ID: fervora-local
     depends_on:
       api-gateway:
         condition: service_healthy

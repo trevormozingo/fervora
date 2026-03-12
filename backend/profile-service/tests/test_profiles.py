@@ -16,7 +16,7 @@ import requests
 
 BASE = os.environ.get("SERVICE_URL", "http://localhost:8000")
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB = os.environ.get("MONGO_DB", "ironguild_test")
+MONGO_DB = os.environ.get("MONGO_DB", "fervora_test")
 
 PROFILE_FIELDS = {"id", "username", "displayName", "bio", "birthday"}
 

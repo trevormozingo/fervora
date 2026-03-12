@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Button, GradientScreen, Input, Text, colors, spacing } from '@/components/ui';
+
+const logo = require('@/assets/images/logo.png');
 import { sendVerificationCode, verifyCode, getIdToken } from '@/services/auth';
 import { config } from '@/config';
 
@@ -62,9 +65,15 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.inner}
       >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.header}>
-          <Text variant="title">Iron Guild</Text>
-          <Text muted style={styles.subtitle}>Sign in to continue</Text>
+          <Image source={logo} style={styles.logo} resizeMode="contain" />
+          <Text variant="title">Fervora</Text>
+          <Text muted style={styles.tagline}>Track. Compete. Conquer.</Text>
         </View>
 
         <View style={styles.form}>
@@ -112,23 +121,52 @@ export default function LoginScreen() {
             </>
           )}
         </View>
+
+        <View style={styles.features}>
+          <View style={styles.featureRow}>
+            <Ionicons name="barbell-outline" size={18} color={colors.mutedForeground} />
+            <Text muted style={styles.featureText}>Log workouts & share PRs</Text>
+          </View>
+          <View style={styles.featureRow}>
+            <Ionicons name="people-outline" size={18} color={colors.mutedForeground} />
+            <Text muted style={styles.featureText}>Find lifters near you</Text>
+          </View>
+          <View style={styles.featureRow}>
+            <Ionicons name="trophy-outline" size={18} color={colors.mutedForeground} />
+            <Text muted style={styles.featureText}>Compete & stay accountable</Text>
+          </View>
+        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </GradientScreen>
   );
 }
 
+const LOGO_SIZE = 120;
+
 const styles = StyleSheet.create({
   inner: {
     flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: spacing['2xl'],
   },
   header: {
     alignItems: 'center',
     marginBottom: spacing['2xl'],
   },
-  subtitle: {
+  logo: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    marginBottom: spacing.lg,
+  },
+  tagline: {
     marginTop: spacing.sm,
+    fontSize: 15,
+    letterSpacing: 1.5,
   },
   form: {
     gap: spacing.md,
@@ -138,5 +176,18 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: spacing.sm,
+  },
+  features: {
+    marginTop: spacing['2xl'],
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  featureText: {
+    fontSize: 14,
   },
 });

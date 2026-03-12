@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     await close_client()
 
 
-app = FastAPI(title="IronGuild API Gateway", lifespan=lifespan)
+app = FastAPI(title="Fervora API Gateway", lifespan=lifespan)
 app.include_router(router)
 
 

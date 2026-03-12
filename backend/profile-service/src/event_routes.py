@@ -99,11 +99,11 @@ async def export_ical(event_id: str):
         raise HTTPException(status_code=404, detail="Event not found")
 
     cal = Calendar()
-    cal.add("prodid", "-//IronGuild//Events//EN")
+    cal.add("prodid", "-//Fervora//Events//EN")
     cal.add("version", "2.0")
 
     event = ICalEvent()
-    event.add("uid", str(doc["_id"]) + "@ironguild")
+    event.add("uid", str(doc["_id"]) + "@fervora")
     event.add("summary", doc["title"])
     event.add("dtstart", datetime.fromisoformat(doc["startTime"]))
 

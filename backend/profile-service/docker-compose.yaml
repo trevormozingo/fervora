@@ -22,7 +22,7 @@ services:
       - "8000:8000"
     environment:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: ironguild_test
+      MONGO_DB: fervora_test
     depends_on:
       mongodb:
         condition: service_healthy
@@ -39,7 +39,7 @@ services:
     environment:
       SERVICE_URL: http://profile-service:8000
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: ironguild_test
+      MONGO_DB: fervora_test
     depends_on:
       profile-service:
         condition: service_healthy

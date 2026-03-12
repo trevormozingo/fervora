@@ -103,7 +103,7 @@ def random_location_near_sf() -> dict:
 
 # ── Firebase token helpers ───────────────────────────────────────────
 
-def init_firebase(emulator_host: str, project_id: str = "ironguild-local"):
+def init_firebase(emulator_host: str, project_id: str = "fervora-local"):
     """Point firebase-admin at the emulator and initialise."""
     os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = emulator_host
     if not firebase_admin._apps:

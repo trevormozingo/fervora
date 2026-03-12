@@ -21,7 +21,7 @@ def _init_firebase():
     if _initialized:
         return
 
-    project_id = os.getenv("FIREBASE_PROJECT_ID", "ironguild-local")
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "fervora-local")
 
     cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if cred_path:

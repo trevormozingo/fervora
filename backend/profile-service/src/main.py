@@ -21,7 +21,7 @@ from .event_routes import router as event_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    db_name = os.getenv("MONGO_DB", "ironguild")
+    db_name = os.getenv("MONGO_DB", "fervora")
     await connect(mongo_uri, db_name)
     init_storage()
     yield
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="IronGuild Profile Service",
+    title="Fervora Profile Service",
     version="0.1.0",
     lifespan=lifespan,
 )

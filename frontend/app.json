@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Iron Guild",
-    "slug": "iron-guild",
+    "name": "Fervora",
+    "slug": "fervora",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "ironguild",
+    "scheme": "fervora",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,11 +14,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ironguild.app",
+      "bundleIdentifier": "com.fervora.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Iron Guild needs camera access to take photos and videos for your posts.",
-        "NSPhotoLibraryUsageDescription": "Iron Guild needs photo library access to attach photos and videos to your posts.",
-        "NSLocationWhenInUseUsageDescription": "Iron Guild uses your location to find nearby users and show your city on your profile."
+        "NSCameraUsageDescription": "Fervora needs camera access to take photos and videos for your posts.",
+        "NSPhotoLibraryUsageDescription": "Fervora needs photo library access to attach photos and videos to your posts.",
+        "NSLocationWhenInUseUsageDescription": "Fervora uses your location to find nearby users and show your city on your profile."
       }
     },
     "plugins": [
@@ -26,14 +26,14 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Iron Guild needs camera access to take photos and videos for your posts.",
-          "photosPermission": "Iron Guild needs photo library access to attach photos and videos to your posts."
+          "cameraPermission": "Fervora needs camera access to take photos and videos for your posts.",
+          "photosPermission": "Fervora needs photo library access to attach photos and videos to your posts."
         }
       ],
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Iron Guild reads your workouts from Apple Health so you can share them with the guild.",
+          "NSHealthShareUsageDescription": "Fervora reads your workouts from Apple Health so you can share them with your community.",
           "NSHealthUpdateUsageDescription": false
         }
       ],
@@ -41,7 +41,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Iron Guild uses your location to find nearby users and show your city on your profile."
+          "locationWhenInUsePermission": "Fervora uses your location to find nearby users and show your city on your profile."
         }
       ]
     ],
@@ -49,7 +49,7 @@
       "typedRoutes": true
     },
     "android": {
-      "package": "com.ironguild.app"
+      "package": "com.fervora.app"
     }
   }
 }

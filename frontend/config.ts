@@ -39,7 +39,7 @@ export const config = {
   apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? `http://${devHost}:8080`,
 
   /** Firebase project ID */
-  firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'ironguild-local',
+  firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'fervora-local',
 
   /** Firebase API key — use your real key in production */
   firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? 'fake-api-key',
@@ -54,7 +54,7 @@ export const config = {
 
   /** Firebase Storage bucket */
   firebaseStorageBucket:
-    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'ironguild-local.appspot.com',
+    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'fervora-local.appspot.com',
 
   /** Emulator host (used only for dev-only helpers like fetching verification codes) */
   emulatorHost: useEmulator ? emulatorHost : null,

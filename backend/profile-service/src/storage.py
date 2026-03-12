@@ -34,9 +34,9 @@ def init_storage(bucket_name: str | None = None) -> None:
     global _bucket, _emulator_host, _public_host
 
     bucket_name = bucket_name or os.getenv(
-        "FIREBASE_STORAGE_BUCKET", "ironguild-local.appspot.com"
+        "FIREBASE_STORAGE_BUCKET", "fervora-local.appspot.com"
     )
-    project_id = os.getenv("FIREBASE_PROJECT_ID", "ironguild-local")
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "fervora-local")
 
     _emulator_host = os.getenv("STORAGE_EMULATOR_HOST")
     # Public host is the externally-reachable URL for the emulator

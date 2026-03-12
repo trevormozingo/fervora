@@ -2,7 +2,7 @@
 # Start the emulator in the background, wait for it to be ready,
 # then seed test phone numbers.
 
-firebase emulators:start --only auth,storage --project ironguild-local &
+firebase emulators:start --only auth,storage --project fervora-local &
 EMULATOR_PID=$!
 
 # Wait for emulator to be ready
@@ -14,7 +14,7 @@ echo "Auth emulator is ready."
 
 # Seed test phone numbers (+13609695450 through +13609695459, code: 123456)
 curl -s -X PATCH \
-  'http://localhost:9099/emulator/v1/projects/ironguild-local/config' \
+  'http://localhost:9099/emulator/v1/projects/fervora-local/config' \
   -H 'Content-Type: application/json' \
   -d '{
     "signIn": { "allowDuplicateEmails": false },

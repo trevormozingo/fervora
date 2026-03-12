@@ -19,7 +19,7 @@ import requests
 
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8080")
 EMULATOR_HOST = os.getenv("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
-PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "ironguild-local")
+PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "fervora-local")
 
 # Firebase Auth Emulator REST endpoints
 _EMULATOR_SIGNUP_URL = (
