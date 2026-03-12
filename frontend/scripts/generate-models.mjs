@@ -42,7 +42,8 @@ function propToZod(name, prop) {
   switch (primaryType) {
     case 'string':
       if (prop.enum) {
-        const literals = prop.enum.map((v) => JSON.stringify(v)).join(', ');
+        const stringLiterals = prop.enum.filter((v) => v !== null);
+        const literals = stringLiterals.map((v) => JSON.stringify(v)).join(', ');
         parts.push(`z.enum([${literals}])`);
       } else {
         parts.push('z.string()');
@@ -62,6 +63,20 @@ function propToZod(name, prop) {
     case 'boolean':
       parts.push('z.boolean()');
       break;
+    case 'array': {
+      let itemZod;
+      if (prop.items?.enum) {
+        const literals = prop.items.enum.map((v) => JSON.stringify(v)).join(', ');
+        itemZod = `z.enum([${literals}])`;
+      } else {
+        const itemType = prop.items?.type || 'string';
+        itemZod = `z.${itemType}()`;
+        if (prop.items?.maxLength != null) itemZod += `.max(${prop.items.maxLength})`;
+      }
+      parts.push(`z.array(${itemZod})`);
+      if (prop.maxItems != null) parts.push(`.max(${prop.maxItems})`);
+      break;
+    }
     default:
       parts.push('z.unknown()');
   }
@@ -231,6 +246,17 @@ function fieldsMetaToString(fields, exportName) {
 }
 
 const sections = [];
+
+// Extract constants from base schema for UI usage
+const interestsEnum = base.properties.interests?.items?.enum;
+const fitnessLevelEnum = base.properties.fitnessLevel?.enum?.filter((v) => v !== null);
+
+if (interestsEnum) {
+  sections.push(`export const INTEREST_OPTIONS = ${JSON.stringify(interestsEnum, null, 2)} as const;`);
+}
+if (fitnessLevelEnum) {
+  sections.push(`export const FITNESS_LEVEL_OPTIONS = ${JSON.stringify(fitnessLevelEnum, null, 2)} as const;`);
+}
 
 // Base
 sections.push(`/** ${base.description} */

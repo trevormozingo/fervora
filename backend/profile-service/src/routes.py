@@ -30,6 +30,8 @@ def _to_public(doc: dict) -> dict:
         "bio": doc.get("bio"),
         "birthday": doc.get("birthday"),
         "profilePhoto": doc.get("profilePhoto"),
+        "interests": doc.get("interests"),
+        "fitnessLevel": doc.get("fitnessLevel"),
     }
     if doc.get("location"):
         resp["location"] = doc["location"]
@@ -45,6 +47,8 @@ def _to_private(doc: dict) -> dict:
         "bio": doc.get("bio"),
         "birthday": doc.get("birthday"),
         "profilePhoto": doc.get("profilePhoto"),
+        "interests": doc.get("interests"),
+        "fitnessLevel": doc.get("fitnessLevel"),
     }
     if doc.get("location"):
         resp["location"] = doc["location"]

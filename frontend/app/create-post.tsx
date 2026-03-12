@@ -9,6 +9,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +42,15 @@ export default function CreatePostScreen() {
       return;
     }
 
+    // Check camera availability on simulator
+    if (useCamera) {
+      const available = await ImagePicker.getCameraPermissionsAsync();
+      if (!available.canAskAgain && !available.granted) {
+        Alert.alert('Camera Unavailable', 'Camera is not available on this device.');
+        return;
+      }
+    }
+
     // Request permissions
     if (useCamera) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -64,19 +74,23 @@ export default function CreatePostScreen() {
       videoMaxDuration: 60,
     };
 
-    const result = useCamera
-      ? await ImagePicker.launchCameraAsync(opts)
-      : await ImagePicker.launchImageLibraryAsync(opts);
+    try {
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
 
-    if (result.canceled) return;
+      if (result.canceled) return;
 
-    const newItems = result.assets.map((asset) => ({
-      url: asset.uri, // local URI — will be uploaded before POST in production
-      mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
-      localUri: asset.uri,
-    }));
+      const newItems = result.assets.map((asset) => ({
+        url: asset.uri,
+        mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+        localUri: asset.uri,
+      }));
 
-    setMedia((prev) => [...prev, ...newItems].slice(0, MAX_MEDIA));
+      setMedia((prev) => [...prev, ...newItems].slice(0, MAX_MEDIA));
+    } catch {
+      Alert.alert('Camera Unavailable', 'Camera is not available on this device (e.g. Simulator).');
+    }
   };
 
   const removeMedia = (index: number) => {
@@ -253,11 +267,21 @@ export default function CreatePostScreen() {
       >
         {/* Header bar */}
         <View style={styles.headerBar}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="close" size={28} color={colors.foreground} />
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerClose}>
+            <Ionicons name="close" size={26} color={colors.foreground} />
           </Pressable>
           <Text variant="title" style={styles.headerTitle}>New Post</Text>
-          <View style={{ width: 28 }} />
+          <Pressable
+            onPress={handleSubmit}
+            disabled={!hasContent || loading}
+            style={[styles.postBtn, (!hasContent || loading) && styles.postBtnDisabled]}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.postBtnText}>Post</Text>
+            )}
+          </Pressable>
         </View>
 
         <ScrollView
@@ -265,83 +289,64 @@ export default function CreatePostScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ── Composer area ── */}
+          <View style={styles.composerCard}>
+            <TextInput
+              placeholder="Title (optional)"
+              placeholderTextColor={colors.placeholder}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={200}
+              style={styles.titleInput}
+            />
+            <TextInput
+              placeholder="What's on your mind?"
+              placeholderTextColor={colors.placeholder}
+              value={body}
+              onChangeText={setBody}
+              multiline
+              maxLength={5000}
+              style={styles.bodyInput}
+            />
+            {errors._root && <Text style={styles.errorText}>{errors._root}</Text>}
+          </View>
+
           {/* ── Media grid ── */}
           {media.length > 0 && (
-            <View style={styles.mediaSection}>
+            <View style={styles.mediaCard}>
               <View style={styles.mediaGrid}>
                 {media.map((item, idx) => (
                   <View key={idx} style={styles.mediaThumbnailWrapper}>
                     <Image source={{ uri: item.localUri }} style={styles.mediaThumbnail} />
                     {item.mimeType.startsWith('video') && (
                       <View style={styles.videoOverlay}>
-                        <Ionicons name="play-circle" size={28} color="#fff" />
+                        <Ionicons name="play-circle" size={32} color="#fff" />
                       </View>
                     )}
                     <Pressable style={styles.mediaRemove} onPress={() => removeMedia(idx)} hitSlop={8}>
-                      <Ionicons name="close-circle" size={22} color={colors.destructive} />
+                      <View style={styles.mediaRemoveBg}>
+                        <Ionicons name="close" size={14} color="#fff" />
+                      </View>
                     </Pressable>
                   </View>
                 ))}
                 {media.length < MAX_MEDIA && (
                   <Pressable style={styles.mediaAddBtn} onPress={() => pickMedia(false)}>
-                    <Ionicons name="add" size={28} color={colors.primary} />
+                    <Ionicons name="add" size={32} color={colors.mutedForeground} />
                   </Pressable>
                 )}
               </View>
-              <Text muted style={styles.mediaCount}>{media.length}/{MAX_MEDIA}</Text>
+              <Text muted style={styles.mediaCount}>{media.length}/{MAX_MEDIA} items</Text>
             </View>
           )}
 
-          {/* ── Text fields ── */}
-          <Input
-            placeholder="Title (optional)"
-            value={title}
-            onChangeText={setTitle}
-            maxLength={200}
-          />
-          <Input
-            placeholder="What's on your mind?"
-            value={body}
-            onChangeText={setBody}
-            multiline
-            maxLength={5000}
-            style={styles.bodyInput}
-          />
-
-          {errors._root && <Text style={styles.errorText}>{errors._root}</Text>}
-
-          {/* ── Section toggles ── */}
-          <View style={styles.toggleRow}>
-            <SectionToggle
-              icon="images-outline"
-              label="Media"
-              active={media.length > 0}
-              onPress={() => pickMedia(false)}
-            />
-            <SectionToggle
-              icon="camera-outline"
-              label="Camera"
-              active={false}
-              onPress={() => pickMedia(true)}
-            />
-            <SectionToggle
-              icon="barbell-outline"
-              label="Workout"
-              active={showWorkout}
-              onPress={() => setShowWorkout((v) => !v)}
-            />
-            <SectionToggle
-              icon="body-outline"
-              label="Body Metrics"
-              active={showMetrics}
-              onPress={() => setShowMetrics((v) => !v)}
-            />
-          </View>
-
           {/* ── Workout section ── */}
           {showWorkout && (
-            <View style={styles.section}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
+                <View style={styles.sectionIcon}>
+                  <Ionicons name="barbell-outline" size={18} color={colors.primaryForeground} />
+                </View>
                 <Text style={styles.sectionTitle}>Workout</Text>
                 {isHealthAvailable() && (
                   <Pressable
@@ -353,12 +358,15 @@ export default function CreatePostScreen() {
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                       <>
-                        <Ionicons name="heart-outline" size={16} color={colors.primary} />
-                        <Text style={styles.healthButtonText}>Import from Health</Text>
+                        <Ionicons name="heart" size={14} color="#e74c3c" />
+                        <Text style={styles.healthButtonText}>Health</Text>
                       </>
                     )}
                   </Pressable>
                 )}
+                <Pressable onPress={() => setShowWorkout(false)} hitSlop={8} style={styles.sectionClose}>
+                  <Ionicons name="close-circle" size={22} color={colors.mutedForeground} />
+                </Pressable>
               </View>
 
               {/* Activity type picker */}
@@ -366,12 +374,15 @@ export default function CreatePostScreen() {
                 style={styles.pickerButton}
                 onPress={() => setShowActivityPicker((v) => !v)}
               >
-                <Text style={activityType ? styles.pickerText : styles.pickerPlaceholder}>
-                  {activityType ? activityLabel(activityType) : 'Select activity type'}
-                </Text>
+                <View style={styles.pickerLeft}>
+                  <Ionicons name="fitness-outline" size={16} color={activityType ? colors.foreground : colors.placeholder} />
+                  <Text style={activityType ? styles.pickerText : styles.pickerPlaceholder}>
+                    {activityType ? activityLabel(activityType) : 'Select activity type'}
+                  </Text>
+                </View>
                 <Ionicons
                   name={showActivityPicker ? 'chevron-up' : 'chevron-down'}
-                  size={20}
+                  size={18}
                   color={colors.mutedForeground}
                 />
               </Pressable>
@@ -431,8 +442,11 @@ export default function CreatePostScreen() {
 
           {/* ── Body Metrics section ── */}
           {showMetrics && (
-            <View style={styles.section}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
+                <View style={styles.sectionIcon}>
+                  <Ionicons name="body-outline" size={18} color={colors.primaryForeground} />
+                </View>
                 <Text style={styles.sectionTitle}>Body Metrics</Text>
                 {isHealthAvailable() && (
                   <Pressable
@@ -444,12 +458,15 @@ export default function CreatePostScreen() {
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                       <>
-                        <Ionicons name="heart-outline" size={16} color={colors.primary} />
-                        <Text style={styles.healthButtonText}>Import from Health</Text>
+                        <Ionicons name="heart" size={14} color="#e74c3c" />
+                        <Text style={styles.healthButtonText}>Health</Text>
                       </>
                     )}
                   </Pressable>
                 )}
+                <Pressable onPress={() => setShowMetrics(false)} hitSlop={8} style={styles.sectionClose}>
+                  <Ionicons name="close-circle" size={22} color={colors.mutedForeground} />
+                </Pressable>
               </View>
               <View style={styles.row}>
                 <View style={styles.halfField}>
@@ -475,13 +492,21 @@ export default function CreatePostScreen() {
           )}
         </ScrollView>
 
-        {/* Submit */}
-        <View style={styles.footer}>
-          <Button
-            label="Post"
-            onPress={handleSubmit}
-            disabled={!hasContent}
-            loading={loading}
+        {/* ── Attachment bar ── */}
+        <View style={styles.attachBar}>
+          <AttachButton icon="images-outline" label="Gallery" onPress={() => pickMedia(false)} />
+          <AttachButton icon="camera-outline" label="Camera" onPress={() => pickMedia(true)} />
+          <AttachButton
+            icon="barbell-outline"
+            label="Workout"
+            active={showWorkout}
+            onPress={() => setShowWorkout((v) => !v)}
+          />
+          <AttachButton
+            icon="body-outline"
+            label="Metrics"
+            active={showMetrics}
+            onPress={() => setShowMetrics((v) => !v)}
           />
         </View>
       </KeyboardAvoidingView>
@@ -531,8 +556,8 @@ export default function CreatePostScreen() {
   );
 }
 
-/* ── Section toggle chip ── */
-function SectionToggle({
+/* ── Attachment bar button ── */
+function AttachButton({
   icon,
   label,
   active,
@@ -540,27 +565,24 @@ function SectionToggle({
 }: {
   icon: string;
   label: string;
-  active: boolean;
+  active?: boolean;
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      style={[styles.toggleChip, active && styles.toggleChipActive]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={icon as any}
-        size={18}
-        color={active ? colors.primaryForeground : colors.foreground}
-      />
-      <Text
-        style={[styles.toggleLabel, active && styles.toggleLabelActive]}
-      >
-        {label}
-      </Text>
+    <Pressable style={styles.attachBtn} onPress={onPress}>
+      <View style={[styles.attachIconWrap, active && styles.attachIconActive]}>
+        <Ionicons
+          name={icon as any}
+          size={20}
+          color={active ? colors.primaryForeground : colors.mutedForeground}
+        />
+      </View>
+      <Text style={[styles.attachLabel, active && styles.attachLabelActive]}>{label}</Text>
     </Pressable>
   );
 }
+
+const THUMB_SIZE = 100;
 
 const styles = StyleSheet.create({
   container: {
@@ -575,44 +597,88 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: fontSizes.lg,
+  },
+  postBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  postBtnDisabled: {
+    opacity: 0.35,
+  },
+  postBtnText: {
+    color: colors.primaryForeground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
   scrollContent: {
     padding: spacing.lg,
     gap: spacing.md,
     paddingBottom: 100,
   },
+
+  // Composer card
+  composerCard: {
+    backgroundColor: colors.muted,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  titleInput: {
+    fontSize: fontSizes.lg,
+    ...fonts.semibold,
+    color: colors.foreground,
+    paddingVertical: spacing.xs,
+  },
   bodyInput: {
-    height: 120,
+    fontSize: fontSizes.base,
+    color: colors.foreground,
+    minHeight: 100,
     textAlignVertical: 'top',
-    paddingTop: spacing.sm,
+    paddingVertical: spacing.xs,
+    lineHeight: 22,
   },
   errorText: {
     color: colors.destructive,
     fontSize: fontSizes.sm,
+    marginTop: 2,
   },
-  mediaSection: {
-    gap: spacing.xs,
+
+  // Media
+  mediaCard: {
+    backgroundColor: colors.muted,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
   mediaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
   },
   mediaThumbnailWrapper: {
     position: 'relative',
-    width: 90,
-    height: 90,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
     borderRadius: radii.md,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   mediaThumbnail: {
     width: '100%',
@@ -622,89 +688,117 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   mediaRemove: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: 4,
+    right: 4,
+  },
+  mediaRemoveBg: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mediaAddBtn: {
-    width: 90,
-    height: 90,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
     borderRadius: radii.md,
     borderWidth: 2,
     borderColor: colors.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background,
   },
   mediaCount: {
     fontSize: fontSizes.xs,
     textAlign: 'right',
   },
-  toggleRow: {
+
+  // Attachment bar
+  attachBar: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  toggleChip: {
-    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.muted,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'transparent',
   },
-  toggleChipActive: {
+  attachBtn: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  attachIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  attachIconActive: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
-  toggleLabel: {
-    fontSize: fontSizes.sm,
+  attachLabel: {
+    fontSize: 11,
+    color: colors.mutedForeground,
     ...fonts.medium,
-    color: colors.foreground,
   },
-  toggleLabelActive: {
-    color: colors.primaryForeground,
+  attachLabelActive: {
+    color: colors.primary,
+    ...fonts.semibold,
   },
-  section: {
+
+  // Section cards
+  sectionCard: {
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.muted,
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sectionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   sectionTitle: {
+    flex: 1,
     fontSize: fontSizes.base,
     ...fonts.semibold,
     color: colors.foreground,
+  },
+  sectionClose: {
+    marginLeft: spacing.xs,
   },
   healthButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: 16,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
   },
   healthButtonText: {
-    fontSize: fontSizes.sm,
-    ...fonts.medium,
-    color: colors.primary,
+    fontSize: fontSizes.xs,
+    ...fonts.semibold,
+    color: colors.foreground,
   },
   healthWorkoutItem: {
     flexDirection: 'row',
@@ -712,8 +806,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.muted,
   },
   healthWorkoutInfo: {
@@ -739,12 +831,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 50,
-    borderWidth: 1,
-    borderColor: colors.border,
+    height: 48,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.background,
+  },
+  pickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   pickerText: {
     fontSize: fontSizes.base,
@@ -760,16 +855,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   pickerItem: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: 16,
     backgroundColor: colors.background,
   },
   pickerItemActive: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
   pickerItemText: {
     fontSize: fontSizes.sm,
@@ -777,11 +869,6 @@ const styles = StyleSheet.create({
   },
   pickerItemTextActive: {
     color: colors.primaryForeground,
-  },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    ...fonts.semibold,
   },
 });

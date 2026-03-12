@@ -62,6 +62,54 @@
         }
       },
       "required": ["type", "coordinates"]
+    },
+    "interests": {
+      "type": ["array", "null"],
+      "description": "Activity interests",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Weightlifting",
+          "Powerlifting",
+          "Bodybuilding",
+          "Strongman",
+          "Olympic Lifting",
+          "Calisthenics",
+          "CrossFit",
+          "Running",
+          "Cycling",
+          "Swimming",
+          "Rowing",
+          "Jump Rope",
+          "Stair Climbing",
+          "Boxing",
+          "MMA",
+          "Wrestling",
+          "Jiu-Jitsu",
+          "Muay Thai",
+          "Yoga",
+          "Pilates",
+          "Stretching",
+          "Mobility Work",
+          "Hiking",
+          "Rock Climbing",
+          "Trail Running",
+          "Obstacle Course Racing",
+          "Functional Fitness",
+          "Basketball",
+          "Soccer",
+          "Tennis",
+          "Volleyball",
+          "Pickleball",
+          "Flag Football"
+        ]
+      },
+      "maxItems": 20
+    },
+    "fitnessLevel": {
+      "type": ["string", "null"],
+      "enum": ["novice", "intermediate", "experienced", "pro", "olympian", null],
+      "description": "Gym fitness experience level"
     }
   },
   "additionalProperties": false

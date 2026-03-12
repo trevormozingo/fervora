@@ -24,6 +24,12 @@
     },
     "location": {
       "$ref": "base.schema.json#/properties/location"
+    },
+    "interests": {
+      "$ref": "base.schema.json#/properties/interests"
+    },
+    "fitnessLevel": {
+      "$ref": "base.schema.json#/properties/fitnessLevel"
     }
   },
   "required": ["id", "username", "displayName"],

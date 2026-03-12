@@ -125,6 +125,12 @@ export default function ProfileScreen() {
       >
         <Ionicons name="pencil-outline" size={22} color={colors.foreground} />
       </Pressable>
+      <Pressable
+        style={styles.addPostButton}
+        onPress={() => router.push('/create-post')}
+      >
+        <Ionicons name="add" size={26} color={colors.foreground} />
+      </Pressable>
 
       <ProfileView
         profile={profile}
@@ -151,6 +157,11 @@ const styles = StyleSheet.create({
   editButton: {
     ...floatingButton,
     top: 112,
+    right: spacing.lg,
+  },
+  addPostButton: {
+    ...floatingButton,
+    top: 164,
     right: spacing.lg,
   },
   center: {

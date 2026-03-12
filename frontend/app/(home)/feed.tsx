@@ -83,12 +83,6 @@ export default function FeedScreen() {
       >
         <Ionicons name="people-outline" size={24} color={colors.foreground} />
       </Pressable>
-      <Pressable
-        style={styles.addButton}
-        onPress={() => router.push('/create-post')}
-      >
-        <Ionicons name="add" size={26} color={colors.foreground} />
-      </Pressable>
 
       <FlatList
         data={posts}
@@ -127,11 +121,7 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     top: 60,
   },
-  addButton: {
-    ...floatingButton,
-    right: spacing.lg,
-    top: 112,
-  },
+
   feedHeader: {
     paddingTop: spacing['2xl'],
     paddingBottom: spacing.lg,

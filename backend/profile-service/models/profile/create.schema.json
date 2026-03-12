@@ -9,8 +9,26 @@
     },
     "displayName": {
       "$ref": "base.schema.json#/properties/displayName"
+    },
+    "profilePhoto": {
+      "$ref": "base.schema.json#/properties/profilePhoto"
+    },
+    "birthday": {
+      "$ref": "base.schema.json#/properties/birthday"
+    },
+    "bio": {
+      "$ref": "base.schema.json#/properties/bio"
+    },
+    "location": {
+      "$ref": "base.schema.json#/properties/location"
+    },
+    "interests": {
+      "$ref": "base.schema.json#/properties/interests"
+    },
+    "fitnessLevel": {
+      "$ref": "base.schema.json#/properties/fitnessLevel"
     }
   },
-  "required": ["username"],
+  "required": ["username", "displayName", "profilePhoto", "birthday"],
   "additionalProperties": false
 }

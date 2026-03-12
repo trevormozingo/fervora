@@ -55,15 +55,18 @@ def _profiles():
 async def create_profile(uid: str, data: dict[str, Any]) -> dict[str, Any]:
     """
     Insert a new profile.
-    Stored fields match base.schema.json: username, displayName, bio, birthday.
+    Stored fields match base.schema.json.
     """
     doc = {
         "_id": uid,
         "username": data["username"],
         "displayName": data.get("displayName", data["username"]),
-        "bio": None,
-        "birthday": None,
-        "location": None,
+        "bio": data.get("bio"),
+        "birthday": data.get("birthday"),
+        "profilePhoto": data.get("profilePhoto"),
+        "location": data.get("location"),
+        "interests": data.get("interests"),
+        "fitnessLevel": data.get("fitnessLevel"),
     }
     await _profiles().insert_one(doc)
     return doc

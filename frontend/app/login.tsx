@@ -17,10 +17,36 @@ export default function LoginScreen() {
 
   const codeSent = !!verificationId;
 
+  /** Strip to digits only */
+  const digitsOnly = (value: string) => value.replace(/\D/g, '');
+
+  /** Format 10 digits as (xxx) xxx-xxxx */
+  const formatPhone = (raw: string) => {
+    const digits = digitsOnly(raw);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const digits = digitsOnly(text).slice(0, 10);
+    setPhone(formatPhone(digits));
+  };
+
+  /** Convert display format to E.164 */
+  const toE164 = (value: string) => `+1${digitsOnly(value)}`;
+
+  const isValidPhone = digitsOnly(phone).length === 10;
+
   const handleSendCode = async () => {
+    if (!isValidPhone) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 10-digit US phone number.');
+      return;
+    }
+    const e164 = toE164(phone);
     setLoading(true);
     try {
-      const { sessionInfo, code: autoCode } = await sendVerificationCode(phone);
+      const { sessionInfo, code: autoCode } = await sendVerificationCode(e164);
       setVerificationId(sessionInfo);
       // In emulator mode, auto-fill the code
       if (autoCode) setCode(autoCode);
@@ -80,16 +106,17 @@ export default function LoginScreen() {
           {!codeSent ? (
             <>
               <Input
-                placeholder="Phone Number"
+                placeholder="(555) 123-4567"
                 keyboardType="phone-pad"
                 autoCapitalize="none"
-                value={phone}
-                onChangeText={setPhone}
+                value={`+1 ${phone}`}
+                onChangeText={(text) => handlePhoneChange(text.replace(/^\+1\s?/, ''))}
+                maxLength={17}
               />
               <Button
                 label="Send Verification Code"
                 onPress={handleSendCode}
-                disabled={!phone.trim()}
+                disabled={!isValidPhone}
                 loading={loading}
                 style={styles.button}
               />
@@ -97,7 +124,7 @@ export default function LoginScreen() {
           ) : (
             <>
               <Text muted style={styles.codeHint}>
-                Enter the code sent to {phone}
+                Enter the code sent to +1 {phone}
               </Text>
               <Input
                 placeholder="Verification Code"

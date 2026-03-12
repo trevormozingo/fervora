@@ -19,6 +19,8 @@ export type ProfileData = {
     coordinates: [number, number];
     label?: string | null;
   } | null;
+  interests?: string[] | null;
+  fitnessLevel?: string | null;
 };
 
 type Props = {
@@ -171,10 +173,27 @@ export function ProfileView({
                 </Pressable>
               </View>
               {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+              {profile.fitnessLevel && (
+                <View style={styles.levelBadge}>
+                  <Ionicons name="barbell-outline" size={14} color={colors.primaryForeground} />
+                  <Text style={styles.levelBadgeText}>
+                    {profile.fitnessLevel.charAt(0).toUpperCase() + profile.fitnessLevel.slice(1)}
+                  </Text>
+                </View>
+              )}
               {profile.location?.label && (
                 <View style={styles.locationRow}>
                   <Ionicons name="location-outline" size={14} color={colors.mutedForeground} />
                   <Text muted style={styles.locationText}>{profile.location.label}</Text>
+                </View>
+              )}
+              {profile.interests && profile.interests.length > 0 && (
+                <View style={styles.interestsRow}>
+                  {profile.interests.map((interest) => (
+                    <View key={interest} style={styles.interestTag}>
+                      <Text style={styles.interestTagText}>{interest}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </>
@@ -310,5 +329,40 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 54,
     right: 20,
+  },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 16,
+    marginTop: spacing.xs,
+  },
+  levelBadgeText: {
+    color: colors.primaryForeground,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  interestsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  interestTag: {
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.muted,
+  },
+  interestTagText: {
+    fontSize: 12,
+    color: colors.foreground,
   },
 });

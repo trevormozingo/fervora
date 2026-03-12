@@ -50,6 +50,20 @@ ACTIVITY_TYPES = [
     "hiit", "walking", "sports", "other",
 ]
 
+INTEREST_OPTIONS = [
+    "Weightlifting", "Powerlifting", "Bodybuilding", "Strongman",
+    "Olympic Lifting", "Calisthenics", "CrossFit", "Running",
+    "Cycling", "Swimming", "Rowing", "Jump Rope", "Stair Climbing",
+    "Boxing", "MMA", "Wrestling", "Jiu-Jitsu", "Muay Thai",
+    "Yoga", "Pilates", "Stretching", "Mobility Work",
+    "Hiking", "Rock Climbing", "Trail Running",
+    "Obstacle Course Racing", "Functional Fitness",
+    "Basketball", "Soccer", "Tennis", "Volleyball",
+    "Pickleball", "Flag Football",
+]
+
+FITNESS_LEVELS = ["novice", "intermediate", "experienced", "pro", "olympian"]
+
 REACTION_TYPES = ["strong", "fire", "heart", "smile", "laugh",
                   "thumbsup", "thumbsdown", "angry"]
 
@@ -224,10 +238,17 @@ def _hdr(token: str) -> dict:
 
 
 def create_profile(gateway: str, token: str, username: str,
-                   display_name: str):
-    resp = requests.post(f"{gateway}/profile",
-                         json={"username": username,
-                               "displayName": display_name},
+                   display_name: str, birthday: str,
+                   interests: list[str], fitness_level: str):
+    payload = {
+        "username": username,
+        "displayName": display_name,
+        "birthday": birthday,
+        "profilePhoto": None,
+        "interests": interests,
+        "fitnessLevel": fitness_level,
+    }
+    resp = requests.post(f"{gateway}/profile", json=payload,
                          headers=_hdr(token))
     resp.raise_for_status()
     return resp.json()
@@ -292,13 +313,23 @@ def comment_on_post(gateway: str, token: str, post_id: str):
 
 # ── Per-user creation ────────────────────────────────────────────────
 
+def _random_birthday() -> str:
+    """Generate a random birthday between 18 and 55 years ago."""
+    d = fake.date_of_birth(minimum_age=18, maximum_age=55)
+    return d.strftime("%Y-%m-%d")
+
+
 def seed_one_user(idx: int, gateway: str, emulator_host: str):
     email = f"seed-{idx:05d}@test.com"
     username = f"{fake.user_name()}_{idx}"[:20]
     display_name = fake.name()
+    birthday = _random_birthday()
+    interests = random.sample(INTEREST_OPTIONS, k=random.randint(1, 6))
+    fitness_level = random.choice(FITNESS_LEVELS)
     try:
         uid, token = create_firebase_user(emulator_host, email)
-        create_profile(gateway, token, username, display_name)
+        create_profile(gateway, token, username, display_name,
+                       birthday, interests, fitness_level)
         upload_profile_photo(gateway, token, display_name)
         update_profile_location(gateway, token, random_location_near_sf())
         return uid, token, username
