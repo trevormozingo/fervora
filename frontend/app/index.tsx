@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { restoreAuth, getIdToken } from '@/services/auth';
+import { registerForPushNotifications } from '@/services/notifications';
 import { config } from '@/config';
 import { colors } from '@/components/ui';
 
@@ -27,6 +28,9 @@ export default function Index() {
         });
 
         if (res.ok) {
+          registerForPushNotifications()
+            .then((t) => console.log('[index] Push registration result:', t))
+            .catch((e) => console.error('[index] Push registration error:', e));
           router.replace('/(home)/feed');
         } else {
           // 404 or 401 — go to login or create-profile

@@ -64,6 +64,10 @@ export default function LoginScreen() {
       const { uid } = await verifyCode(verificationId, code);
       console.log('Signed in as', uid);
 
+      // Register for push notifications now that we're signed in
+      const { registerForPushNotifications } = await import('@/services/notifications');
+      registerForPushNotifications();
+
       // Fetch existing profile
       const token = getIdToken();
       const res = await fetch(`${config.apiBaseUrl}/profile`, {

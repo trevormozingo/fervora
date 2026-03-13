@@ -56,7 +56,19 @@
       "typedRoutes": true
     },
     "android": {
-      "package": "com.fervora.app"
-    }
+      "package": "com.fervora.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "202d18dc-a85a-4fe9-9c5b-c36dc74d674c"
+      }
+    },
+    "owner": "trevormozingo"
   }
 }

@@ -47,11 +47,16 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   // Get the Expo push token
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    Constants.expoConfig?.slug ??
+    'fervora';
+  console.log('[notifications] Using projectId:', projectId);
   const tokenData = await Notifications.getExpoPushTokenAsync({
     projectId,
   });
   const expoPushToken = tokenData.data;
+  console.log('[notifications] Got push token:', expoPushToken);
 
   // Android needs a notification channel
   if (Platform.OS === 'android') {
@@ -71,9 +76,12 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
 async function saveTokenToBackend(token: string): Promise<void> {
   const idToken = getIdToken();
-  if (!idToken) return;
+  if (!idToken) {
+    console.warn('[notifications] No auth token — skipping backend registration');
+    return;
+  }
   try {
-    await fetch(`${config.apiBaseUrl}/profile/push-token`, {
+    const res = await fetch(`${config.apiBaseUrl}/profile/push-token`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -81,6 +89,7 @@ async function saveTokenToBackend(token: string): Promise<void> {
       },
       body: JSON.stringify({ token }),
     });
+    console.log('[notifications] Backend registration:', res.status);
   } catch (e) {
     console.warn('[notifications] Failed to save push token:', e);
   }

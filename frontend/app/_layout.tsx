@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { registerForPushNotifications, addNotificationResponseListener } from '@/services/notifications';
-import { getUid } from '@/services/auth';
+import { addNotificationResponseListener } from '@/services/notifications';
 import type { EventSubscription } from 'expo-notifications';
 
 export default function RootLayout() {
@@ -10,12 +9,6 @@ export default function RootLayout() {
   const notifListenerRef = useRef<EventSubscription>();
 
   useEffect(() => {
-    // Register for push notifications once the user is authenticated
-    const uid = getUid();
-    if (uid) {
-      registerForPushNotifications();
-    }
-
     // Handle notification taps → navigate to conversation
     notifListenerRef.current = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
