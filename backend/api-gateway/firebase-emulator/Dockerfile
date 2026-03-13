@@ -15,6 +15,9 @@ RUN echo '{ \
   "storage": { \
     "rules": "storage.rules" \
   }, \
+  "firestore": { \
+    "rules": "firestore.rules" \
+  }, \
   "emulators": { \
     "auth": { \
       "host": "0.0.0.0", \
@@ -23,6 +26,10 @@ RUN echo '{ \
     "storage": { \
       "host": "0.0.0.0", \
       "port": 9199 \
+    }, \
+    "firestore": { \
+      "host": "0.0.0.0", \
+      "port": 8181 \
     }, \
     "ui": { \
       "enabled": true, \
@@ -33,10 +40,11 @@ RUN echo '{ \
 }' > firebase.json
 
 COPY storage.rules /app/storage.rules
+COPY firestore.rules /app/firestore.rules
 
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-EXPOSE 9099 9199 4000
+EXPOSE 9099 9199 8181 4000
 
 CMD ["/app/start.sh"]

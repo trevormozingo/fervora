@@ -14,6 +14,8 @@ export default function RootLayout() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="conversation" />
+        <Stack.Screen name="new-chat" />
       </Stack>
     </>
   );

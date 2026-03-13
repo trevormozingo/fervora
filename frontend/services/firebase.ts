@@ -17,6 +17,7 @@ import {
   getReactNativePersistence,
   connectAuthEmulator,
 } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '@/config';
 
@@ -41,12 +42,20 @@ try {
 
 export const auth = authInstance;
 
+// Firestore
+export const db = getFirestore(app);
+
 // Connect to emulators in local dev
 if (config.emulatorHost) {
   try {
     connectAuthEmulator(auth, config.emulatorHost, {
       disableWarnings: true,
     });
+  } catch {
+    // Already connected — ignore
+  }
+  try {
+    connectFirestoreEmulator(db, config.firestoreHost, config.firestorePort);
   } catch {
     // Already connected — ignore
   }

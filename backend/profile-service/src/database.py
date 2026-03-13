@@ -80,6 +80,17 @@ async def get_profile_by_username(username: str) -> dict[str, Any] | None:
     return await _profiles().find_one({"username": username})
 
 
+async def search_profiles(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Case-insensitive prefix search on username and displayName."""
+    import re
+    pattern = re.escape(query)
+    regex = {"$regex": f"^{pattern}", "$options": "i"}
+    cursor = _profiles().find(
+        {"$or": [{"username": regex}, {"displayName": regex}]},
+    ).limit(limit)
+    return await cursor.to_list(length=limit)
+
+
 async def update_profile(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
     """Update only the provided fields (from update.schema.json)."""
     return await _profiles().find_one_and_update(

@@ -156,6 +156,18 @@ async def nearby_profiles(request: Request):
     return await _proxy_to_service("profile", "/nearby", request, uid)
 
 
+@router.get("/profile/search")
+async def search_profiles(request: Request):
+    """Search profiles by username prefix — no auth required."""
+    return await _proxy_to_service("profile", "/search", request)
+
+
+@router.get("/profile/uid/{uid}")
+async def get_profile_by_uid(uid: str, request: Request):
+    """Get a public profile by UID — no auth required."""
+    return await _proxy_to_service("profile", f"/uid/{uid}", request)
+
+
 @router.get("/profile/{username}")
 async def get_public_profile(username: str, request: Request):
     """Get a public profile by username — no auth required."""

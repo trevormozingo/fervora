@@ -8,6 +8,7 @@ import { ProfileView, type ProfileData } from '@/components/ProfileView';
 import { type Post } from '@/components/PostCard';
 import { getIdToken, getUid } from '@/services/auth';
 import { config } from '@/config';
+import { getOrCreateConversation } from '@/services/messaging';
 
 export default function UserProfileScreen() {
   const router = useRouter();
@@ -147,6 +148,16 @@ export default function UserProfileScreen() {
     setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   };
 
+  const handleMessage = useCallback(async () => {
+    const myUid = getUid();
+    if (!myUid || !profile) return;
+    const conversationId = await getOrCreateConversation(myUid, profile.id);
+    router.push({
+      pathname: '/conversation',
+      params: { conversationId, otherUid: profile.id },
+    });
+  }, [profile, router]);
+
   const loadMore = () => {
     if (hasMore && !postsLoading && cursor && profile) {
       fetchPosts(profile.id, cursor);
@@ -189,6 +200,7 @@ export default function UserProfileScreen() {
         isFollowing={isFollowing}
         followLoading={followLoading}
         onFollowToggle={profile?.id !== getUid() ? handleFollow : undefined}
+        onMessage={profile?.id !== getUid() ? handleMessage : undefined}
       />
     </GradientScreen>
   );

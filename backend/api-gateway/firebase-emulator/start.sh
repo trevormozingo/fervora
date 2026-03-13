@@ -2,7 +2,7 @@
 # Start the emulator in the background, wait for it to be ready,
 # then seed test phone numbers.
 
-firebase emulators:start --only auth,storage --project fervora-local &
+firebase emulators:start --only auth,storage,firestore --project fervora-local &
 EMULATOR_PID=$!
 
 # Wait for emulator to be ready

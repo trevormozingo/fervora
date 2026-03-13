@@ -61,4 +61,10 @@ export const config = {
 
   /** Whether we're using the emulator */
   useEmulator,
+
+  /** Firestore emulator host (IP only, no protocol) */
+  firestoreHost: devHost,
+
+  /** Firestore emulator port */
+  firestorePort: useEmulator ? 8181 : 0,
 } as const;

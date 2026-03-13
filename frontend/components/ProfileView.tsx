@@ -50,6 +50,8 @@ type Props = {
   followLoading?: boolean;
   /** Called when the follow/unfollow button is pressed */
   onFollowToggle?: () => void;
+  /** Called when the Message button is pressed */
+  onMessage?: () => void;
 };
 
 export function ProfileView({
@@ -66,6 +68,7 @@ export function ProfileView({
   isFollowing,
   followLoading,
   onFollowToggle,
+  onMessage,
 }: Props) {
   const router = useRouter();
   const [photoExpanded, setPhotoExpanded] = useState(false);
@@ -125,27 +128,35 @@ export function ProfileView({
               <Text variant="title">{profile.displayName}</Text>
               <Text muted>@{profile.username}</Text>
               {!isOwnProfile && onFollowToggle && (
-                <Pressable
-                  style={[
-                    styles.followButton,
-                    isFollowing && styles.followButtonActive,
-                  ]}
-                  onPress={onFollowToggle}
-                  disabled={followLoading}
-                >
-                  {followLoading ? (
-                    <ActivityIndicator size="small" color={colors.foreground} />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.followButtonText,
-                        isFollowing && styles.followButtonTextActive,
-                      ]}
-                    >
-                      {isFollowing ? 'Following' : 'Follow'}
-                    </Text>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={[
+                      styles.followButton,
+                      isFollowing && styles.followButtonActive,
+                    ]}
+                    onPress={onFollowToggle}
+                    disabled={followLoading}
+                  >
+                    {followLoading ? (
+                      <ActivityIndicator size="small" color={colors.foreground} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.followButtonText,
+                          isFollowing && styles.followButtonTextActive,
+                        ]}
+                      >
+                        {isFollowing ? 'Following' : 'Follow'}
+                      </Text>
+                    )}
+                  </Pressable>
+                  {onMessage && (
+                    <Pressable style={styles.messageButton} onPress={onMessage}>
+                      <Ionicons name="chatbubble-outline" size={16} color={colors.foreground} />
+                      <Text style={styles.messageButtonText}>Message</Text>
+                    </Pressable>
                   )}
-                </Pressable>
+                </View>
               )}
               <View style={styles.followRow}>
                 <Pressable
@@ -314,6 +325,28 @@ const styles = StyleSheet.create({
   },
   followButtonTextActive: {
     color: colors.foreground,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  messageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  messageButtonText: {
+    color: colors.foreground,
+    fontWeight: '600',
+    fontSize: 14,
   },
   lightboxOverlay: {
     flex: 1,

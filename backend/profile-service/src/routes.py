@@ -13,6 +13,7 @@ from .database import (
     get_nearby_profiles,
     get_profile_by_id,
     get_profile_by_username,
+    search_profiles,
     update_profile,
 )
 from .schema import validate
@@ -87,6 +88,20 @@ async def nearby(
     """Find profiles near a coordinate. Excludes the requesting user."""
     docs = await get_nearby_profiles(lng, lat, radius_km=radius, limit=limit, exclude_uid=x_user_id)
     return {"items": [_to_public(d) for d in docs], "count": len(docs)}
+
+
+@router.get("/search")
+async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)):
+    docs = await search_profiles(q, limit)
+    return [_to_public(doc) for doc in docs]
+
+
+@router.get("/uid/{uid}")
+async def get_by_uid(uid: str):
+    doc = await get_profile_by_id(uid)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return _to_public(doc)
 
 
 @router.get("/{username}")

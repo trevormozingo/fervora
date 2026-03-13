@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 import firebase_admin
-from firebase_admin import auth as fb_auth
+from firebase_admin import auth as fb_auth, firestore as fb_firestore
 import requests
 from faker import Faker
 
@@ -92,6 +92,20 @@ POST_TITLES = [
     "Cardio blast", "Swimming laps", "Boxing class",
 ]
 
+# Message templates for seed conversations
+_SEED_MESSAGES = [
+    ["Hey! Great workout today 💪", "Thanks! Felt amazing, hit a new PR on squats"],
+    ["Want to do a run together this weekend?", "Absolutely! Saturday morning works for me", "Perfect, let's meet at Golden Gate Park at 8am"],
+    ["Just tried that yoga class you recommended", "How was it?", "Loved it! My flexibility is already improving"],
+    ["Nice deadlift PR! What program are you running?", "Thanks! I've been following 5/3/1 for the past 3 months", "That's awesome, I might give it a try"],
+    ["Do you have any good pre-workout meal suggestions?", "I usually go with oatmeal and a banana about an hour before", "Simple but effective, I'll try that tomorrow"],
+    ["Just signed up for a half marathon!", "That's amazing! When is it?", "In 3 months, so I need to start training seriously"],
+    ["How's the recovery going?", "Much better, the PT exercises are really helping", "Glad to hear it, take it slow!"],
+    ["Anyone want to join a cycling group?", "I'm in! What route were you thinking?", "The coastal loop, about 30 miles round trip"],
+    ["Crushed my HIIT session today", "What exercises did you do?", "Burpees, box jumps, kettlebell swings, and battle ropes"],
+    ["Meal prep tip: make a big batch of chicken and rice on Sunday", "Game changer, saves so much time during the week"],
+]
+
 
 # ── Location helpers ─────────────────────────────────────────────────
 
@@ -120,8 +134,37 @@ def random_location_near_sf() -> dict:
 def init_firebase(emulator_host: str, project_id: str = "fervora-local"):
     """Point firebase-admin at the emulator and initialise."""
     os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = emulator_host
+    os.environ["FIRESTORE_EMULATOR_HOST"] = emulator_host.replace("9099", "8181")
     if not firebase_admin._apps:
-        firebase_admin.initialize_app(options={"projectId": project_id})
+        # The emulator ignores credentials, but the Firestore client
+        # still requires a valid credential object.  Generate a throw-
+        # away RSA key and wrap it in a Certificate credential.
+        import json, tempfile
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+
+        priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem = priv.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode()
+        sa = {
+            "type": "service_account",
+            "project_id": project_id,
+            "private_key_id": "emulator-dummy",
+            "private_key": pem,
+            "client_email": f"dummy@{project_id}.iam.gserviceaccount.com",
+            "client_id": "0",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump(sa, tmp)
+        tmp.close()
+        cred = firebase_admin.credentials.Certificate(tmp.name)
+        firebase_admin.initialize_app(cred, options={"projectId": project_id})
+        os.unlink(tmp.name)
 
 
 def get_id_token_for_uid(emulator_host: str, uid: str) -> str:
@@ -524,6 +567,42 @@ def main():
     print(f"  ✓ {my_rxn} reactions, {my_cmt} comments on your posts "
           f"in {time.time() - t5:.1f}s")
 
+    # ── Phase 7: Fake users send YOU messages ────────────────────────
+    print(f"\n=== Phase 7: Seeding conversations ===")
+    t6 = time.time()
+    fs = fb_firestore.client()
+    msg_users = random.sample(users, min(10, len(users)))
+    convo_count = 0
+
+    for uid, _token, uname in msg_users:
+        try:
+            participants = sorted([my_uid, uid])
+            convo_ref = fs.collection("conversations").document()
+            thread = random.choice(_SEED_MESSAGES)
+            # Alternate messages between the fake user and you
+            senders = [uid, my_uid]
+            now = time.time()
+            convo_ref.set({
+                "participants": participants,
+                "hiddenFor": [],
+                "lastMessage": thread[-1],
+                "lastMessageAt": fb_firestore.SERVER_TIMESTAMP,
+                "createdAt": fb_firestore.SERVER_TIMESTAMP,
+            })
+            msgs_coll = convo_ref.collection("messages")
+            for i, msg_text in enumerate(thread):
+                sender = senders[i % 2]
+                msgs_coll.add({
+                    "senderUid": sender,
+                    "text": msg_text,
+                    "createdAt": fb_firestore.SERVER_TIMESTAMP,
+                })
+            convo_count += 1
+        except Exception as e:
+            print(f"  [!] convo with {uname}: {e}", file=sys.stderr)
+
+    print(f"  ✓ {convo_count} conversations in {time.time() - t6:.1f}s")
+
     # ── Summary ──────────────────────────────────────────────────────
     total = time.time() - t0
     print(f"\n{'=' * 55}")
@@ -536,6 +615,7 @@ def main():
     print(f"  Your posts         : {len(my_posts)}")
     print(f"  Reactions on yours : {my_rxn}")
     print(f"  Comments on yours  : {my_cmt}")
+    print(f"  Conversations      : {convo_count}")
     print(f"{'=' * 55}")
 
 

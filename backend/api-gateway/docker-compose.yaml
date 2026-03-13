@@ -29,6 +29,7 @@ services:
     ports:
       - "9099:9099"
       - "9199:9199"
+      - "8181:8181"
       - "4000:4000"
     healthcheck:
       test: ["CMD", "node", "-e", "const h=require('http');h.get('http://localhost:9099/',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
