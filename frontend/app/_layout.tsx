@@ -9,7 +9,7 @@ export default function RootLayout() {
   const notifListenerRef = useRef<EventSubscription>();
 
   useEffect(() => {
-    // Handle notification taps → navigate to conversation
+    // Handle notification taps → navigate based on type
     notifListenerRef.current = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
       if (data?.conversationId && data?.otherUid) {
@@ -20,6 +20,10 @@ export default function RootLayout() {
             otherUid: data.otherUid as string,
           },
         });
+      } else if (data?.type === 'follow' && data?.followerUsername) {
+        router.push(`/user/${data.followerUsername}` as any);
+      } else if (data?.type === 'comment' || data?.type === 'reaction') {
+        router.navigate('/(home)/profile' as any);
       }
     });
 
@@ -42,6 +46,8 @@ export default function RootLayout() {
         <Stack.Screen name="friends" />
         <Stack.Screen name="conversation" />
         <Stack.Screen name="new-chat" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="follow-list" />
       </Stack>
     </>
   );

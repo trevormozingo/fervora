@@ -12,9 +12,12 @@ from .database import (
     create_profile,
     delete_profile,
     get_nearby_profiles,
+    get_notifications,
     get_profile_by_id,
     get_profile_by_username,
     get_push_tokens,
+    get_unread_notification_count,
+    mark_notifications_read,
     remove_push_token,
     search_profiles,
     update_profile,
@@ -151,6 +154,41 @@ async def send_push(request: Request, x_user_id: str = Header(...)):
 async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)):
     docs = await search_profiles(q, limit)
     return [_to_public(doc) for doc in docs]
+
+
+@router.get("/notifications")
+async def list_notifications(
+    x_user_id: str = Header(...),
+    limit: int = Query(50, ge=1, le=100),
+    cursor: str | None = Query(default=None),
+):
+    """Get the current user's notifications."""
+    docs = await get_notifications(x_user_id, limit=limit, cursor=cursor)
+    items = [
+        {
+            "id": str(d["_id"]),
+            "type": d["type"],
+            "title": d["title"],
+            "body": d["body"],
+            "data": d.get("data", {}),
+            "read": d["read"],
+            "createdAt": d["createdAt"],
+        }
+        for d in docs
+    ]
+    return {"items": items, "count": len(items), "cursor": items[-1]["id"] if items else None}
+
+
+@router.get("/notifications/unread-count")
+async def unread_count(x_user_id: str = Header(...)):
+    count = await get_unread_notification_count(x_user_id)
+    return {"count": count}
+
+
+@router.post("/notifications/mark-read")
+async def mark_read(x_user_id: str = Header(...)):
+    updated = await mark_notifications_read(x_user_id)
+    return {"updated": updated}
 
 
 @router.get("/uid/{uid}")

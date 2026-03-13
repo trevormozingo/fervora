@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientScreen, Text, colors, spacing, fonts, fontSizes, radii } from '@/components/ui';
 import { getUid, getIdToken } from '@/services/auth';
-import { sendMessage, subscribeToMessages, type Message } from '@/services/messaging';
+import { sendMessage, subscribeToMessages, markConversationRead, type Message } from '@/services/messaging';
 import { sendPushToUsers } from '@/services/notifications';
 import { config } from '@/config';
 
@@ -65,10 +65,14 @@ export default function ConversationScreen() {
   // Subscribe to messages
   useEffect(() => {
     if (!conversationId) return;
+    // Mark conversation as read
+    if (myUid) markConversationRead(conversationId, myUid).catch(() => {});
     const unsub = subscribeToMessages(conversationId, (msgs) => {
       setMessages(msgs);
       // Scroll to bottom on new messages
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      // Mark as read when new messages arrive
+      if (myUid) markConversationRead(conversationId, myUid).catch(() => {});
     });
     return unsub;
   }, [conversationId]);

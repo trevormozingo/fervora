@@ -45,6 +45,7 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: Date | null;
   createdAt: Date | null;
+  unread: boolean;
 }
 
 export interface Message {
@@ -140,13 +141,19 @@ export function subscribeToConversations(
         const hidden: string[] = d.data().hiddenFor ?? [];
         return !hidden.includes(uid);
       })
-      .map((d) => ({
-        id: d.id,
-        participants: d.data().participants,
-        lastMessage: d.data().lastMessage ?? '',
-        lastMessageAt: toDate(d.data().lastMessageAt),
-        createdAt: toDate(d.data().createdAt),
-      }));
+      .map((d) => {
+        const lastReadAt = toDate(d.data().lastReadAt?.[uid]);
+        const lastMessageAt = toDate(d.data().lastMessageAt);
+        const unread = lastMessageAt != null && (lastReadAt == null || lastReadAt < lastMessageAt);
+        return {
+          id: d.id,
+          participants: d.data().participants,
+          lastMessage: d.data().lastMessage ?? '',
+          lastMessageAt,
+          createdAt: toDate(d.data().createdAt),
+          unread,
+        };
+      });
     onData(conversations);
   });
 }
@@ -220,6 +227,18 @@ export async function hideConversation(
 ): Promise<void> {
   await updateDoc(doc(db, 'conversations', conversationId), {
     hiddenFor: arrayUnion(uid),
+  });
+}
+
+/**
+ * Mark a conversation as read by the current user.
+ */
+export async function markConversationRead(
+  conversationId: string,
+  uid: string,
+): Promise<void> {
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    [`lastReadAt.${uid}`]: serverTimestamp(),
   });
 }
 

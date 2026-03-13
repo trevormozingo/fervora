@@ -117,8 +117,11 @@ export default function MessagesScreen() {
           </View>
           <View style={styles.rowContent}>
             <View style={styles.rowHeader}>
-              <Text style={styles.username} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
+              <Text style={[styles.username, item.unread && styles.unreadText]} numberOfLines={1}>{displayName}</Text>
+              <View style={styles.rowRight}>
+                {item.unread && <View style={styles.unreadDot} />}
+                <Text style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
+              </View>
             </View>
             {item.lastMessage ? (
               <Text style={styles.preview} numberOfLines={1}>
@@ -227,6 +230,21 @@ const styles = StyleSheet.create({
   time: {
     fontSize: fontSizes.xs,
     color: colors.mutedForeground,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+  unreadText: {
+    color: colors.foreground,
+    ...fonts.bold,
   },
   preview: {
     fontSize: fontSizes.sm,

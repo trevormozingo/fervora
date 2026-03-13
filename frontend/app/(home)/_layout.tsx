@@ -2,8 +2,11 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, gradientColors, gradientStart, gradientEnd } from '@/components/ui';
+import { useUnreadCount } from '@/services/unread';
 
 export default function HomeLayout() {
+  const unreadCount = useUnreadCount();
+
   return (
     <LinearGradient
       colors={[...gradientColors]}
@@ -40,6 +43,8 @@ export default function HomeLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-outline" size={size} color={color} />
           ),
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 11 },
         }}
       />
       <Tabs.Screen

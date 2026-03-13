@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, Text, colors, spacing, floatingButton } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing } from '@/components/ui';
 import { PostCard, type Post } from '@/components/PostCard';
 import { getIdToken } from '@/services/auth';
 import { config } from '@/config';
@@ -15,6 +15,20 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const token = getIdToken();
+      const res = await fetch(`${config.apiBaseUrl}/profile/notifications/unread-count`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadNotifs(data.count);
+      }
+    } catch {}
+  }, []);
 
   const fetchPosts = useCallback(async (cursorVal?: string | null) => {
     if (loading) return;
@@ -41,6 +55,7 @@ export default function FeedScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchPosts();
+      fetchUnreadCount();
     }, [])
   );
 
@@ -77,12 +92,28 @@ export default function FeedScreen() {
 
   return (
     <GradientScreen transparent>
-      <Pressable
-        style={styles.personButton}
-        onPress={() => router.push('/friends')}
-      >
-        <Ionicons name="people-outline" size={24} color={colors.foreground} />
-      </Pressable>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }} />
+        <Pressable
+          style={styles.bellButton}
+          onPress={() => router.push('/notifications')}
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.foreground} />
+          {unreadNotifs > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadNotifs > 99 ? '99+' : unreadNotifs}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          style={styles.personButton}
+          onPress={() => router.push('/friends')}
+        >
+          <Ionicons name="people-outline" size={24} color={colors.foreground} />
+        </Pressable>
+      </View>
 
       <FlatList
         data={posts}
@@ -117,9 +148,35 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
 
   personButton: {
-    ...floatingButton,
-    right: spacing.lg,
-    top: 60,
+    padding: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  bellButton: {
+    padding: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 
   feedHeader: {

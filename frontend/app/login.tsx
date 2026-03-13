@@ -67,6 +67,8 @@ export default function LoginScreen() {
       // Register for push notifications now that we're signed in
       const { registerForPushNotifications } = await import('@/services/notifications');
       registerForPushNotifications();
+      const { startUnreadListener } = await import('@/services/unread');
+      startUnreadListener();
 
       // Fetch existing profile
       const token = getIdToken();

@@ -778,3 +778,70 @@ async def rsvp_event(
         return_document=True,
     )
     return result
+
+
+# ── Notifications ─────────────────────────────────────────────────────
+
+
+def _notifications():
+    if _db is None:
+        raise RuntimeError("Database not connected")
+    return _db.notifications
+
+
+async def create_notification(
+    recipient_uid: str,
+    notif_type: str,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create an in-app notification for a user."""
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "recipientUid": recipient_uid,
+        "type": notif_type,
+        "title": title,
+        "body": body,
+        "data": data or {},
+        "read": False,
+        "createdAt": now,
+    }
+    result = await _notifications().insert_one(doc)
+    doc["_id"] = result.inserted_id
+    return doc
+
+
+async def get_notifications(
+    uid: str, limit: int = 50, cursor: str | None = None
+) -> list[dict[str, Any]]:
+    """Get notifications for a user, newest first."""
+    query: dict[str, Any] = {"recipientUid": uid}
+    if cursor:
+        try:
+            query["_id"] = {"$lt": ObjectId(cursor)}
+        except Exception:
+            pass
+    docs = (
+        _notifications()
+        .find(query)
+        .sort("_id", -1)
+        .limit(limit)
+    )
+    return [doc async for doc in docs]
+
+
+async def get_unread_notification_count(uid: str) -> int:
+    """Count unread notifications for a user."""
+    return await _notifications().count_documents(
+        {"recipientUid": uid, "read": False}
+    )
+
+
+async def mark_notifications_read(uid: str) -> int:
+    """Mark all notifications as read for a user. Returns count updated."""
+    result = await _notifications().update_many(
+        {"recipientUid": uid, "read": False},
+        {"$set": {"read": True}},
+    )
+    return result.modified_count

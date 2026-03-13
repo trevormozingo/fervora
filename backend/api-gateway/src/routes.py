@@ -183,6 +183,27 @@ async def search_profiles(request: Request):
     return await _proxy_to_service("profile", "/search", request)
 
 
+@router.get("/profile/notifications")
+async def list_notifications(request: Request):
+    """List notifications — requires auth."""
+    uid = _require_auth(request)
+    return await _proxy_to_service("profile", "/notifications", request, uid)
+
+
+@router.get("/profile/notifications/unread-count")
+async def notification_unread_count(request: Request):
+    """Get unread notification count — requires auth."""
+    uid = _require_auth(request)
+    return await _proxy_to_service("profile", "/notifications/unread-count", request, uid)
+
+
+@router.post("/profile/notifications/mark-read")
+async def mark_notifications_read(request: Request):
+    """Mark all notifications as read — requires auth."""
+    uid = _require_auth(request)
+    return await _proxy_to_service("profile", "/notifications/mark-read", request, uid)
+
+
 @router.get("/profile/uid/{uid}")
 async def get_profile_by_uid(uid: str, request: Request):
     """Get a public profile by UID — no auth required."""
