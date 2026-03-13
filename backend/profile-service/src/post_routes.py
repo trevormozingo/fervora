@@ -11,7 +11,7 @@ Only users with an existing profile can create or delete posts.
 from fastapi import APIRouter, Header, HTTPException, Query, Request, UploadFile, File
 from typing import List
 
-from .database import create_post, delete_post, get_user_posts
+from .database import create_post, delete_post, get_user_posts, get_post_by_id
 from .schema import validate
 from .storage import upload_post_media, generate_post_id, delete_post_media
 
@@ -68,6 +68,15 @@ async def list_user_posts(
     items = [_to_response(d) for d in docs]
     next_cursor = items[-1]["createdAt"] if items else None
     return {"items": items, "count": len(items), "cursor": next_cursor}
+
+
+@router.get("/{post_id}")
+async def get_single_post(post_id: str, x_user_id: str = Header(...)):
+    """Return a single post by ID, enriched with reactions and comments."""
+    doc = await get_post_by_id(post_id, viewer_uid=x_user_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return _to_response(doc)
 
 
 @router.post("", status_code=201)

@@ -23,7 +23,11 @@ export default function RootLayout() {
       } else if (data?.type === 'follow' && data?.followerUsername) {
         router.push(`/user/${data.followerUsername}` as any);
       } else if (data?.type === 'comment' || data?.type === 'reaction') {
-        router.navigate('/(home)/profile' as any);
+        if (data?.postId) {
+          router.push({ pathname: '/post-detail', params: { postId: data.postId as string } });
+        } else {
+          router.navigate('/(home)/profile' as any);
+        }
       }
     });
 
@@ -48,6 +52,7 @@ export default function RootLayout() {
         <Stack.Screen name="new-chat" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="follow-list" />
+        <Stack.Screen name="post-detail" />
       </Stack>
     </>
   );

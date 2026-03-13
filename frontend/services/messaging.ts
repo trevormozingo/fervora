@@ -155,6 +155,8 @@ export function subscribeToConversations(
         };
       });
     onData(conversations);
+  }, () => {
+    // Silently ignore permission-denied (e.g. after sign-out)
   });
 }
 

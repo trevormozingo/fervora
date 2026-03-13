@@ -164,7 +164,7 @@ export default function ConversationScreen() {
           <Ionicons name="chevron-back" size={28} color={colors.foreground} />
         </Pressable>
         <Pressable
-          style={styles.headerTitle}
+          style={styles.headerCenter}
           onPress={() => {
             if (!isGroup && otherUids[0] && participantProfiles[otherUids[0]]) {
               router.push({
@@ -174,6 +174,41 @@ export default function ConversationScreen() {
             }
           }}
         >
+          {isGroup ? (
+            (() => {
+              const photos = otherUids
+                .map((uid) => participantProfiles[uid]?.photo)
+                .filter(Boolean) as string[];
+              if (photos.length >= 2) {
+                return (
+                  <View style={styles.headerStackedContainer}>
+                    <Image source={{ uri: photos[0] }} style={styles.headerStackedBack} />
+                    <Image source={{ uri: photos[1] }} style={styles.headerStackedFront} />
+                  </View>
+                );
+              }
+              if (photos.length === 1) {
+                return <Image source={{ uri: photos[0] }} style={styles.headerAvatar} />;
+              }
+              return (
+                <View style={styles.headerAvatarFallback}>
+                  <Ionicons name="people" size={18} color={colors.mutedForeground} />
+                </View>
+              );
+            })()
+          ) : (
+            (() => {
+              const photo = otherUids[0] && participantProfiles[otherUids[0]]?.photo;
+              if (photo) {
+                return <Image source={{ uri: photo }} style={styles.headerAvatar} />;
+              }
+              return (
+                <View style={styles.headerAvatarFallback}>
+                  <Ionicons name="person" size={18} color={colors.mutedForeground} />
+                </View>
+              );
+            })()
+          )}
           <Text style={styles.headerName} numberOfLines={1}>
             {headerLabel || 'Chat'}
           </Text>
@@ -239,9 +274,47 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  headerTitle: {
+  headerCenter: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  headerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  headerAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerStackedContainer: {
+    width: 38,
+    height: 32,
+  },
+  headerStackedBack: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  headerStackedFront: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   headerName: {
     fontSize: fontSizes.lg,

@@ -285,6 +285,23 @@ async def get_user_posts(
     return posts
 
 
+async def get_post_by_id(post_id: str, viewer_uid: str | None = None) -> dict[str, Any] | None:
+    """Return a single post by ID, enriched with reactions and comments."""
+    try:
+        oid = ObjectId(post_id)
+    except Exception:
+        return None
+    doc = await _posts().find_one({"_id": oid})
+    if not doc:
+        return None
+    # Resolve author info
+    prof = await _profiles().find_one({"_id": doc["authorUid"]}, {"username": 1, "profilePhoto": 1})
+    doc["authorUsername"] = prof.get("username", doc["authorUid"]) if prof else doc["authorUid"]
+    doc["authorProfilePhoto"] = prof.get("profilePhoto") if prof else None
+    await _enrich_posts([doc], viewer_uid=viewer_uid)
+    return doc
+
+
 async def _enrich_posts(posts: list[dict[str, Any]], viewer_uid: str | None = None) -> None:
     """Attach reactionSummary, myReaction, and recentComments to each post in-place."""
     if not posts:

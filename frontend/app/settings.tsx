@@ -3,12 +3,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, GradientScreen, Text, colors, spacing } from '@/components/ui';
 import { signOut, deleteFirebaseAccount, getIdToken } from '@/services/auth';
+import { stopUnreadListener } from '@/services/unread';
 import { config } from '@/config';
 
 export default function SettingsScreen() {
   const router = useRouter();
 
   const handleSignOut = async () => {
+    stopUnreadListener();
     await signOut();
     router.dismissAll();
     router.replace('/login');
@@ -25,6 +27,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              stopUnreadListener();
               const token = getIdToken();
               // Delete profile from backend
               await fetch(`${config.apiBaseUrl}/profile`, {

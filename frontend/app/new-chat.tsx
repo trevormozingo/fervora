@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   TextInput,
@@ -183,9 +184,13 @@ export default function NewChatScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <Pressable style={styles.resultRow} onPress={() => toggleUser(item)}>
-            <View style={styles.resultAvatar}>
-              <Ionicons name="person" size={20} color={colors.mutedForeground} />
-            </View>
+            {item.profilePhoto ? (
+              <Image source={{ uri: item.profilePhoto }} style={styles.resultAvatarPhoto} />
+            ) : (
+              <View style={styles.resultAvatar}>
+                <Ionicons name="person" size={20} color={colors.mutedForeground} />
+              </View>
+            )}
             <View style={styles.resultInfo}>
               <Text style={styles.resultName}>{item.displayName}</Text>
               <Text style={styles.resultUsername}>@{item.username}</Text>
@@ -284,6 +289,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  resultAvatarPhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   resultInfo: {
     flex: 1,

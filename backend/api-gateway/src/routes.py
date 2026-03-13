@@ -256,6 +256,13 @@ async def list_user_posts(target_uid: str, request: Request):
     return await _proxy_to_service("posts", f"/user/{target_uid}", request, uid)
 
 
+@router.get("/posts/{post_id}")
+async def get_single_post(post_id: str, request: Request):
+    """Get a single post by ID — requires auth (for myReaction)."""
+    uid = _require_auth(request)
+    return await _proxy_to_service("posts", f"/{post_id}", request, uid)
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Follow routes — auth required
 # ─────────────────────────────────────────────────────────────────────

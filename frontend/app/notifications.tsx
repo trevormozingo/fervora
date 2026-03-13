@@ -81,8 +81,11 @@ export default function NotificationsScreen() {
       // Navigate to the follower's profile
       router.push(`/user/${notif.data.followerUsername}` as any);
     } else if (notif.type === 'comment' || notif.type === 'reaction') {
-      // Navigate to own profile to see the post with the comment/reaction
-      router.navigate('/(home)/profile' as any);
+      if (notif.data?.postId) {
+        router.push({ pathname: '/post-detail', params: { postId: notif.data.postId } } as any);
+      } else {
+        router.navigate('/(home)/profile' as any);
+      }
     } else if (notif.data?.conversationId) {
       router.push({
         pathname: '/conversation',
