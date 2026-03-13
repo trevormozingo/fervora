@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -28,7 +29,9 @@ export default function ConversationScreen() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [headerLabel, setHeaderLabel] = useState<string>('');
-  const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
+  const [participantProfiles, setParticipantProfiles] = useState<
+    Record<string, { name: string; photo?: string }>
+  >({});
   const flatListRef = useRef<FlatList>(null);
 
   const otherUids = (otherUid ?? '').split(',').filter(Boolean);
@@ -43,21 +46,24 @@ export default function ConversationScreen() {
       const headers: Record<string, string> = token
         ? { Authorization: `Bearer ${token}` }
         : {};
-      const names: Record<string, string> = {};
+      const resolved: Record<string, { name: string; photo?: string }> = {};
       await Promise.all(
         allUids.map(async (uid) => {
           try {
             const res = await fetch(`${config.apiBaseUrl}/profile/uid/${uid}`, { headers });
             if (res.ok) {
               const data = await res.json();
-              names[uid] = data.username ?? uid.slice(0, 8);
+              resolved[uid] = {
+                name: data.username ?? uid.slice(0, 8),
+                photo: data.profilePhoto,
+              };
             }
           } catch {}
         }),
       );
-      setParticipantNames(names);
+      setParticipantProfiles(resolved);
       setHeaderLabel(
-        otherUids.map((uid) => names[uid] ?? uid.slice(0, 8)).join(', '),
+        otherUids.map((uid) => resolved[uid]?.name ?? uid.slice(0, 8)).join(', '),
       );
     })();
   }, [otherUid]);
@@ -85,7 +91,7 @@ export default function ConversationScreen() {
     try {
       await sendMessage(conversationId, myUid, trimmed);
       // Send push notification to other participants (fire-and-forget)
-      const myName = participantNames[myUid] || 'Someone';
+      const myName = participantProfiles[myUid]?.name || 'Someone';
       sendPushToUsers(
         otherUids,
         myName,
@@ -97,43 +103,57 @@ export default function ConversationScreen() {
     } finally {
       setSending(false);
     }
-  }, [text, conversationId, myUid, sending, otherUids, participantNames]);
+  }, [text, conversationId, myUid, sending, otherUids, participantProfiles]);
 
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => {
       const isMe = item.senderUid === myUid;
+      const senderProfile = participantProfiles[item.senderUid];
+      const senderPhoto = senderProfile?.photo;
+
       return (
-        <View
-          style={[
-            styles.bubble,
-            isMe ? styles.bubbleMe : styles.bubbleThem,
-          ]}
-        >
-          {isGroup && !isMe && (
-            <Text style={styles.senderName}>
-              {participantNames[item.senderUid] ?? item.senderUid.slice(0, 8)}
-            </Text>
+        <View style={[styles.messageRow, isMe && styles.messageRowMe]}>
+          {!isMe && (
+            senderPhoto ? (
+              <Image source={{ uri: senderPhoto }} style={styles.msgAvatar} />
+            ) : (
+              <View style={styles.msgAvatarFallback}>
+                <Ionicons name="person" size={14} color={colors.mutedForeground} />
+              </View>
+            )
           )}
-          <Text
+          <View
             style={[
-              styles.bubbleText,
-              isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
+              styles.bubble,
+              isMe ? styles.bubbleMe : styles.bubbleThem,
             ]}
           >
-            {item.text}
-          </Text>
-          {item.createdAt && (
-            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-              {item.createdAt.toLocaleTimeString([], {
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
+            {isGroup && !isMe && (
+              <Text style={styles.senderName}>
+                {senderProfile?.name ?? item.senderUid.slice(0, 8)}
+              </Text>
+            )}
+            <Text
+              style={[
+                styles.bubbleText,
+                isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
+              ]}
+            >
+              {item.text}
             </Text>
-          )}
+            {item.createdAt && (
+              <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+                {item.createdAt.toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </Text>
+            )}
+          </View>
         </View>
       );
     },
-    [myUid, isGroup, participantNames],
+    [myUid, isGroup, participantProfiles],
   );
 
   return (
@@ -146,10 +166,10 @@ export default function ConversationScreen() {
         <Pressable
           style={styles.headerTitle}
           onPress={() => {
-            if (!isGroup && otherUids[0] && participantNames[otherUids[0]]) {
+            if (!isGroup && otherUids[0] && participantProfiles[otherUids[0]]) {
               router.push({
                 pathname: '/user/[username]',
-                params: { username: participantNames[otherUids[0]] },
+                params: { username: participantProfiles[otherUids[0]].name },
               });
             }
           }}
@@ -234,12 +254,35 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'flex-end',
   },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginVertical: 3,
+    gap: 6,
+  },
+  messageRowMe: {
+    justifyContent: 'flex-end',
+  },
+  msgAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    marginBottom: 2,
+  },
+  msgAvatarFallback: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
   bubble: {
     maxWidth: '78%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 18,
-    marginVertical: 3,
   },
   bubbleMe: {
     alignSelf: 'flex-end',

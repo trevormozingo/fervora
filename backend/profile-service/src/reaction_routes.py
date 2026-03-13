@@ -31,12 +31,13 @@ async def _notify_post_author_reaction(post_id: str, reactor_uid: str, reaction_
             return
         reactor = await get_profile_by_id(reactor_uid)
         name = reactor.get("username", "Someone") if reactor else "Someone"
+        photo = reactor.get("profilePhoto", "") if reactor else ""
         emoji = REACTION_EMOJI.get(reaction_type, reaction_type)
         title = f"{name} reacted {emoji} to your post"
         # Save in-app notification
         await create_notification(
             post["authorUid"], "reaction", title, "",
-            {"postId": post_id, "reactorUid": reactor_uid, "reactionType": reaction_type},
+            {"postId": post_id, "reactorUid": reactor_uid, "reactionType": reaction_type, "profilePhoto": photo},
         )
         # Send push
         tokens = await get_push_tokens([post["authorUid"]])

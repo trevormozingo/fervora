@@ -20,10 +20,11 @@ async def _notify_new_follower(follower_uid: str, target_uid: str):
     try:
         follower = await get_profile_by_id(follower_uid)
         name = follower.get("username", "Someone") if follower else "Someone"
+        photo = follower.get("profilePhoto", "") if follower else ""
         title = f"{name} started following you"
         await create_notification(
             target_uid, "follow", title, "",
-            {"followerUid": follower_uid, "followerUsername": name},
+            {"followerUid": follower_uid, "followerUsername": name, "profilePhoto": photo},
         )
         tokens = await get_push_tokens([target_uid])
         if not tokens:

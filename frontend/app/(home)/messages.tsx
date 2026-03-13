@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Alert, Animated, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Animated, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientScreen, Text, colors, spacing, fonts, fontSizes, radii, floatingButton } from '@/components/ui';
@@ -97,6 +97,41 @@ export default function MessagesScreen() {
         .map((uid) => profiles[uid]?.username ?? uid.slice(0, 8))
         .join(', ');
 
+      // Build avatar: single photo, stacked photos for group, or fallback icon
+      const otherPhotos = others
+        .map((uid) => profiles[uid]?.profilePhoto)
+        .filter(Boolean) as string[];
+
+      let avatarElement: React.ReactNode;
+      if (!isGroup && otherPhotos.length > 0) {
+        avatarElement = (
+          <Image source={{ uri: otherPhotos[0] }} style={styles.avatarPhoto} />
+        );
+      } else if (isGroup && otherPhotos.length >= 2) {
+        avatarElement = (
+          <View style={styles.avatar}>
+            <Image source={{ uri: otherPhotos[0] }} style={styles.stackedPhotoBack} />
+            <Image source={{ uri: otherPhotos[1] }} style={styles.stackedPhotoFront} />
+          </View>
+        );
+      } else if (isGroup && otherPhotos.length === 1) {
+        avatarElement = (
+          <View style={styles.avatar}>
+            <Image source={{ uri: otherPhotos[0] }} style={styles.avatarPhoto} />
+          </View>
+        );
+      } else {
+        avatarElement = (
+          <View style={styles.avatar}>
+            <Ionicons
+              name={isGroup ? 'people' : 'person'}
+              size={22}
+              color={colors.mutedForeground}
+            />
+          </View>
+        );
+      }
+
       return (
         <Pressable
           style={styles.row}
@@ -108,13 +143,7 @@ export default function MessagesScreen() {
           }
           onLongPress={() => handleDelete(item.id)}
         >
-          <View style={styles.avatar}>
-            <Ionicons
-              name={isGroup ? 'people' : 'person'}
-              size={22}
-              color={colors.mutedForeground}
-            />
-          </View>
+          {avatarElement}
           <View style={styles.rowContent}>
             <View style={styles.rowHeader}>
               <Text style={[styles.username, item.unread && styles.unreadText]} numberOfLines={1}>{displayName}</Text>
@@ -212,6 +241,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  stackedPhotoBack: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  stackedPhotoFront: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   rowContent: {
     flex: 1,

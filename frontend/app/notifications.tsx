@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -97,14 +97,19 @@ export default function NotificationsScreen() {
   const renderNotification = useCallback(
     ({ item }: { item: Notification }) => {
       const iconName = TYPE_ICONS[item.type] ?? 'notifications';
+      const photo = item.data?.profilePhoto;
       return (
         <Pressable
           style={[styles.row, !item.read && styles.unreadRow]}
           onPress={() => handlePress(item)}
         >
-          <View style={[styles.iconCircle, !item.read && styles.unreadIcon]}>
-            <Ionicons name={iconName} size={18} color={!item.read ? '#fff' : colors.mutedForeground} />
-          </View>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.avatarPhoto} />
+          ) : (
+            <View style={[styles.iconCircle, !item.read && styles.unreadIcon]}>
+              <Ionicons name={iconName} size={18} color={!item.read ? '#fff' : colors.mutedForeground} />
+            </View>
+          )}
           <View style={styles.content}>
             <Text style={[styles.title, !item.read && styles.unreadTitle]} numberOfLines={2}>
               {item.title}
@@ -195,6 +200,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 2,
+  },
+  avatarPhoto: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     marginTop: 2,
   },
   unreadIcon: {

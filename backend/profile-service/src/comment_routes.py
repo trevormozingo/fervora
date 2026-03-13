@@ -38,12 +38,13 @@ async def _notify_post_author_comment(post_id: str, commenter_uid: str, comment_
             return
         commenter = await get_profile_by_id(commenter_uid)
         name = commenter.get("username", "Someone") if commenter else "Someone"
+        photo = commenter.get("profilePhoto", "") if commenter else ""
         preview = comment_body[:100]
         title = f"{name} commented on your post"
         # Save in-app notification
         await create_notification(
             post["authorUid"], "comment", title, preview,
-            {"postId": post_id, "commenterUid": commenter_uid},
+            {"postId": post_id, "commenterUid": commenter_uid, "profilePhoto": photo},
         )
         # Send push
         tokens = await get_push_tokens([post["authorUid"]])
