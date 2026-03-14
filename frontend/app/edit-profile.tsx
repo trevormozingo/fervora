@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, Text, colors, spacing } from '@/components/ui';
+import { GradientScreen, Text, colors, fonts, fontSizes, spacing } from '@/components/ui';
 import { ProfileForm, type ProfileFormData } from '@/components/ProfileForm';
 import { getIdToken } from '@/services/auth';
 import { uploadProfilePhoto } from '@/services/storage';
@@ -99,9 +99,9 @@ export default function EditProfileScreen() {
     <GradientScreen>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          <Ionicons name="chevron-back" size={24} color={colors.foreground} />
         </Pressable>
-        <Text variant="heading">Edit Profile</Text>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
         <View style={styles.backButton} />
       </View>
       <KeyboardAvoidingView
@@ -126,10 +126,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  headerTitle: {
+    fontSize: fontSizes.xl,
+    ...fonts.bold,
+    color: colors.foreground,
   },
   backButton: {
     width: 40,
+    height: 40,
+    justifyContent: 'center',
   },
   center: {
     flex: 1,

@@ -220,8 +220,13 @@ export function ProfileForm({
           {errors.photo && <RNText style={s.errorText}>{errors.photo}</RNText>}
         </View>
 
-        {/* ── Text fields ── */}
-        <View style={s.fields}>
+        {/* ── Basic Info Card ── */}
+        <View style={s.sectionCard}>
+          <View style={s.sectionHeaderRow}>
+            <Ionicons name="person-outline" size={18} color={colors.foreground} />
+            <RNText style={s.sectionTitle}>Basic Info</RNText>
+          </View>
+
           {showUsername && (
             <Input
               label="Username"
@@ -253,6 +258,14 @@ export function ProfileForm({
             maxLength={500}
             style={s.bioInput}
           />
+        </View>
+
+        {/* ── Details Card ── */}
+        <View style={s.sectionCard}>
+          <View style={s.sectionHeaderRow}>
+            <Ionicons name="information-circle-outline" size={18} color={colors.foreground} />
+            <RNText style={s.sectionTitle}>Details</RNText>
+          </View>
 
           {/* ── Birthday ── */}
           <View style={s.fieldGroup}>
@@ -273,7 +286,7 @@ export function ProfileForm({
             <View style={s.locationRow}>
               {locationLabel ? (
                 <View style={s.locationDisplay}>
-                  <Ionicons name="location" size={16} color={colors.primary} />
+                  <Ionicons name="location" size={16} color={colors.brandRed} />
                   <Text style={s.locationText}>{locationLabel}</Text>
                 </View>
               ) : (
@@ -293,6 +306,14 @@ export function ProfileForm({
                 </Pressable>
               </View>
             </View>
+          </View>
+        </View>
+
+        {/* ── Fitness & Interests Card ── */}
+        <View style={s.sectionCard}>
+          <View style={s.sectionHeaderRow}>
+            <Ionicons name="fitness-outline" size={18} color={colors.foreground} />
+            <RNText style={s.sectionTitle}>Fitness & Interests</RNText>
           </View>
 
           {/* ── Fitness Level ── */}
@@ -392,79 +413,118 @@ const s = StyleSheet.create({
   scroll: {
     paddingBottom: 100,
   },
-  // Photo
-  photoSection: { alignItems: 'center', marginBottom: spacing.xl },
+
+  // ── Photo ──
+  photoSection: { alignItems: 'center', marginBottom: spacing.lg },
   photoPressable: { width: PHOTO_SIZE, height: PHOTO_SIZE, position: 'relative' },
-  photoWrapper: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2, overflow: 'hidden' },
+  photoWrapper: {
+    width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8,
+  },
   photoImage: { width: PHOTO_SIZE, height: PHOTO_SIZE },
   photoPlaceholder: {
     width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2,
-    backgroundColor: colors.muted, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)',
   },
   cameraOverlay: {
     position: 'absolute', bottom: 2, right: 2, backgroundColor: colors.primary,
-    width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: colors.background,
+    width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2.5, borderColor: colors.background,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
   },
-  photoHint: { marginTop: spacing.sm, fontSize: 12 },
+  photoHint: { marginTop: spacing.sm, fontSize: fontSizes.xs },
 
-  // Fields
-  fields: { gap: spacing.md },
+  // ── Section Cards ──
+  sectionCard: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: fontSizes.base,
+    ...fonts.semibold,
+    color: colors.foreground,
+  },
+
+  // ── Fields ──
   fieldGroup: { gap: spacing.xs },
   label: { fontSize: fontSizes.sm, ...fonts.medium, color: colors.foreground },
   bioInput: { height: 100, textAlignVertical: 'top', paddingTop: spacing.sm },
   errorText: { fontSize: fontSizes.xs, color: colors.destructive, marginTop: 2 },
 
-  // Date picker trigger
+  // ── Date picker trigger ──
   pickerTrigger: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+    backgroundColor: colors.muted,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   pickerText: { flex: 1, fontSize: fontSizes.base, color: colors.foreground },
   pickerPlaceholder: { flex: 1, fontSize: fontSizes.base, color: colors.placeholder },
 
-  // Location
+  // ── Location ──
   locationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  locationDisplay: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  locationText: { fontSize: 13 },
+  locationDisplay: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 },
+  locationText: { fontSize: fontSizes.sm },
   locationButtons: { flexDirection: 'row', gap: spacing.xs },
   locationButton: {
     backgroundColor: colors.primary, paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2, borderRadius: radii.sm, minWidth: 80, alignItems: 'center',
+    paddingVertical: spacing.sm, borderRadius: radii.md, minWidth: 80, alignItems: 'center',
   },
-  mapButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationButtonText: { color: colors.primaryForeground, fontWeight: '600', fontSize: 13 },
+  mapButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  locationButtonText: { color: colors.primaryForeground, ...fonts.semibold, fontSize: fontSizes.sm },
 
-  // Fitness level chips
+  // ── Fitness level chips ──
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   levelChip: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
-    backgroundColor: colors.muted,
+    borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
-  levelChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  levelChipText: { fontSize: fontSizes.sm, color: colors.foreground, fontWeight: '500' },
+  levelChipActive: {
+    backgroundColor: colors.primary, borderColor: colors.primary,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 3,
+  },
+  levelChipText: { fontSize: fontSizes.sm, color: colors.foreground, ...fonts.medium },
   levelChipTextActive: { color: colors.primaryForeground },
 
-  // Interest tags
+  // ── Interest tags ──
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2,
-    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
-    backgroundColor: colors.muted,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
-  tagActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tagActive: {
+    backgroundColor: colors.primary, borderColor: colors.primary,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 3,
+  },
   tagText: { fontSize: fontSizes.sm, color: colors.foreground },
-  tagTextActive: { color: colors.primaryForeground, fontWeight: '600' },
+  tagTextActive: { color: colors.primaryForeground, ...fonts.semibold },
 
-  // Submit
-  submitButton: { marginTop: spacing.xl },
+  // ── Submit ──
+  submitButton: { marginTop: spacing.lg },
 
-  // Date modal
+  // ── Date modal ──
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 0, borderTopRightRadius: 0, paddingBottom: 34 },
+  modalSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl,
+    paddingBottom: 34,
+  },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,

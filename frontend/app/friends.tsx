@@ -4,7 +4,7 @@ import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
+import { GradientScreen, Text, colors, fonts, fontSizes, spacing, radii } from '@/components/ui';
 import { LocationPicker } from '@/components/LocationPicker';
 import { getUid } from '@/services/auth';
 import { apiFetch } from '@/services/api';
@@ -175,7 +175,7 @@ export default function FriendsScreen() {
 
     return (
       <Pressable
-        style={styles.userRow}
+        style={styles.userCard}
         onPress={() => router.push(`/user/${item.username}` as any)}
       >
         {item.profilePhoto ? (
@@ -187,20 +187,22 @@ export default function FriendsScreen() {
         )}
         <View style={styles.userInfo}>
           <Text style={styles.displayName}>{item.displayName}</Text>
-          <Text muted>@{item.username}</Text>
-          <View style={styles.locationRow}>
-            {item.location?.label && (
-              <>
-                <Ionicons name="location-outline" size={12} color={colors.mutedForeground} />
-                <Text muted style={styles.locationText}>{item.location.label}</Text>
-              </>
-            )}
-            {dist != null && (
-              <Text muted style={styles.locationText}>
-                {item.location?.label ? ' · ' : ''}{formatDistance(dist)}
-              </Text>
-            )}
-          </View>
+          <Text muted style={styles.username}>@{item.username}</Text>
+          {(item.location?.label || dist != null) && (
+            <View style={styles.locationRow}>
+              {item.location?.label && (
+                <>
+                  <Ionicons name="location" size={11} color={colors.brandRed} />
+                  <Text muted style={styles.locationText}>{item.location.label}</Text>
+                </>
+              )}
+              {dist != null && (
+                <Text muted style={styles.distText}>
+                  {item.location?.label ? ' · ' : ''}{formatDistance(dist)}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
         {item.id !== getUid() && (
           <Pressable
@@ -223,72 +225,96 @@ export default function FriendsScreen() {
 
   return (
     <GradientScreen>
+      {/* ── Header ── */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          <Ionicons name="chevron-back" size={24} color={colors.foreground} />
         </Pressable>
-        <Text variant="heading">Nearby</Text>
+        <Text style={styles.headerTitle}>Nearby</Text>
         <View style={styles.backButton} />
       </View>
 
-      {/* Radius slider */}
-      <View style={styles.sliderSection}>
-        <Text style={styles.sliderLabel}>{radiusMiles} {radiusMiles === 1 ? 'mile' : 'miles'}</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={200}
-          step={1}
-          value={radiusMiles}
-          onValueChange={setRadiusMiles}
-          onSlidingComplete={() => {
-            if (profileLocation?.coordinates) {
-              fetchNearbyWithCoords(profileLocation.coordinates[0], profileLocation.coordinates[1]);
-            }
-          }}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.border}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      {/* ── Radius control ── */}
+      {!needsLocation && (
+        <View style={styles.radiusCard}>
+          <View style={styles.radiusHeader}>
+            <Ionicons name="radio-outline" size={16} color={colors.foreground} />
+            <Text style={styles.radiusLabel}>Search Radius</Text>
+            <View style={styles.radiusValueBadge}>
+              <Text style={styles.radiusValue}>{radiusMiles} mi</Text>
+            </View>
+          </View>
+          <Slider
+            style={styles.slider}
+            minimumValue={1}
+            maximumValue={200}
+            step={1}
+            value={radiusMiles}
+            onValueChange={setRadiusMiles}
+            onSlidingComplete={() => {
+              if (profileLocation?.coordinates) {
+                fetchNearbyWithCoords(profileLocation.coordinates[0], profileLocation.coordinates[1]);
+              }
+            }}
+            minimumTrackTintColor={colors.primary}
+            maximumTrackTintColor={colors.border}
+            thumbTintColor={colors.primary}
+          />
+          <View style={styles.sliderTicks}>
+            <Text muted style={styles.tickText}>1 mi</Text>
+            <Text muted style={styles.tickText}>200 mi</Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── Results count ── */}
+      {!loading && !needsLocation && !error && users.length > 0 && (
+        <View style={styles.resultsBanner}>
+          <Text muted style={styles.resultsText}>
+            {users.length} {users.length === 1 ? 'person' : 'people'} found nearby
+          </Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text muted style={{ marginTop: spacing.md }}>Finding people nearby…</Text>
+          <Text muted style={styles.loadingText}>Finding people nearby…</Text>
         </View>
       ) : needsLocation ? (
         <View style={styles.center}>
-          <Ionicons name="location-outline" size={48} color={colors.mutedForeground} />
-          <Text style={{ marginTop: spacing.md, fontWeight: '600', fontSize: 16 }}>
-            Location Not Set
+          <View style={styles.emptyIcon}>
+            <Ionicons name="location-outline" size={48} color={colors.mutedForeground} />
+          </View>
+          <Text style={styles.emptyTitle}>Location Not Set</Text>
+          <Text muted style={styles.emptySubtitle}>
+            Set your location to discover nearby users.{'\n'}This will also save it to your profile.
           </Text>
-          <Text muted style={{ marginTop: spacing.xs, textAlign: 'center', paddingHorizontal: spacing.xl }}>
-            Set your location to discover nearby users. This will also save it to your profile.
-          </Text>
-          <Pressable onPress={setLocationFromGPS} style={styles.setLocationButton} disabled={settingLocation}>
+          <Pressable onPress={setLocationFromGPS} style={styles.primaryPill} disabled={settingLocation}>
             {settingLocation ? (
               <ActivityIndicator size="small" color={colors.primaryForeground} />
             ) : (
               <>
                 <Ionicons name="navigate" size={16} color={colors.primaryForeground} />
-                <Text style={styles.setLocationText}>Use My Current Location</Text>
+                <Text style={styles.pillText}>Use My Current Location</Text>
               </>
             )}
           </Pressable>
-          <Pressable onPress={() => setMapPickerVisible(true)} style={styles.pickOnMapButton}>
-            <Ionicons name="map-outline" size={16} color={colors.primaryForeground} />
-            <Text style={styles.setLocationText}>Pick on Map</Text>
+          <Pressable onPress={() => setMapPickerVisible(true)} style={styles.secondaryPill}>
+            <Ionicons name="map-outline" size={16} color={colors.foreground} />
+            <Text style={styles.secondaryPillText}>Pick on Map</Text>
           </Pressable>
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="alert-circle-outline" size={40} color={colors.mutedForeground} />
-          <Text muted style={{ marginTop: spacing.md, textAlign: 'center', paddingHorizontal: spacing.lg }}>
-            {error}
-          </Text>
-          <Pressable onPress={fetchNearby} style={styles.retryButton}>
-            <Text style={styles.retryText}>Retry</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="alert-circle-outline" size={48} color={colors.mutedForeground} />
+          </View>
+          <Text style={styles.emptyTitle}>Something went wrong</Text>
+          <Text muted style={styles.emptySubtitle}>{error}</Text>
+          <Pressable onPress={fetchNearby} style={styles.primaryPill}>
+            <Ionicons name="refresh" size={16} color={colors.primaryForeground} />
+            <Text style={styles.pillText}>Retry</Text>
           </Pressable>
         </View>
       ) : (
@@ -299,10 +325,12 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="people-outline" size={40} color={colors.mutedForeground} />
-              <Text muted style={{ marginTop: spacing.md }}>No users found nearby.</Text>
-              <Text muted style={{ fontSize: 12, marginTop: spacing.xs }}>
-                Try increasing the radius or check back later.
+              <View style={styles.emptyIcon}>
+                <Ionicons name="people-outline" size={48} color={colors.mutedForeground} />
+              </View>
+              <Text style={styles.emptyTitle}>No one nearby</Text>
+              <Text muted style={styles.emptySubtitle}>
+                Try increasing the search radius{'\n'}or check back later.
               </Text>
             </View>
           }
@@ -338,48 +366,103 @@ export default function FriendsScreen() {
   );
 }
 
-const AVATAR_SIZE = 44;
+const AVATAR_SIZE = 48;
 
 const styles = StyleSheet.create({
+  // ── Header ──
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: fontSizes.xl,
+    ...fonts.bold,
+    color: colors.foreground,
   },
   backButton: {
     width: 40,
-  },
-  center: {
-    flex: 1,
+    height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  sliderSection: {
-    paddingHorizontal: spacing.lg,
+
+  // ── Radius card ──
+  radiusCard: {
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    padding: spacing.md,
   },
-  sliderLabel: {
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
+  radiusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  radiusLabel: {
+    fontSize: fontSizes.sm,
+    ...fonts.semibold,
     color: colors.foreground,
-    marginBottom: spacing.xs,
+    flex: 1,
+  },
+  radiusValueBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: radii.full,
+  },
+  radiusValue: {
+    color: colors.primaryForeground,
+    fontSize: fontSizes.xs,
+    ...fonts.bold,
   },
   slider: {
     width: '100%',
-    height: 40,
+    height: 36,
+    marginTop: spacing.xs,
   },
+  sliderTicks: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -4,
+  },
+  tickText: {
+    fontSize: 11,
+  },
+
+  // ── Results banner ──
+  resultsBanner: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  resultsText: {
+    fontSize: fontSizes.xs,
+    ...fonts.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // ── List ──
   list: {
     paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
-  userRow: {
+
+  // ── User card ──
+  userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     gap: spacing.md,
   },
   avatar: {
@@ -397,16 +480,20 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    ...fonts.bold,
+    fontSize: fontSizes.base,
   },
   userInfo: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   displayName: {
-    fontWeight: '600',
-    fontSize: 15,
+    ...fonts.semibold,
+    fontSize: fontSizes.base,
+    color: colors.foreground,
+  },
+  username: {
+    fontSize: fontSizes.sm,
   },
   locationRow: {
     flexDirection: 'row',
@@ -415,64 +502,100 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationText: {
-    fontSize: 13,
+    fontSize: fontSizes.xs,
   },
-  retryButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.sm,
+  distText: {
+    fontSize: fontSizes.xs,
   },
-  retryText: {
-    color: colors.primaryForeground,
-    fontWeight: '600',
-  },
-  setLocationButton: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  setLocationText: {
-    color: colors.primaryForeground,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  pickOnMapButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    opacity: 0.85,
-  },
+
+  // ── Follow button ──
   followBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.sm,
-    minWidth: 80,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    minWidth: 84,
     alignItems: 'center',
   },
   followBtnActive: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
   },
   followBtnText: {
     color: colors.primaryForeground,
-    fontWeight: '600',
-    fontSize: 13,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
   followBtnTextActive: {
     color: colors.foreground,
+  },
+
+  // ── Center / empty states ──
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSizes.sm,
+  },
+  emptyIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: fontSizes.lg,
+    ...fonts.semibold,
+    color: colors.foreground,
+    marginBottom: spacing.xs,
+  },
+  emptySubtitle: {
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Pill buttons ──
+  primaryPill: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pillText: {
+    color: colors.primaryForeground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
+  },
+  secondaryPill: {
+    marginTop: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  secondaryPillText: {
+    color: colors.foreground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
 });
