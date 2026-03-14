@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, View } from 're
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, colors, spacing } from '@/components/ui';
+import { Text, colors, spacing, radii } from '@/components/ui';
 
 type LocationResult = {
   coordinates: [number, number]; // [lng, lat]
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.sm,
     alignItems: 'center',
   },
   confirmText: {

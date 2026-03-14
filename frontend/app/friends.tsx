@@ -4,7 +4,7 @@ import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { GradientScreen, Text, colors, spacing } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
 import { LocationPicker } from '@/components/LocationPicker';
 import { getIdToken, getUid } from '@/services/auth';
 import { config } from '@/config';
@@ -451,14 +451,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   retryButton: {
     marginTop: spacing.md,
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: 8,
+    borderRadius: radii.sm,
   },
   retryText: {
     color: colors.primaryForeground,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     minWidth: 80,
     alignItems: 'center',
   },

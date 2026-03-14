@@ -82,6 +82,26 @@
           "type": ["number", "null"],
           "minimum": 0,
           "description": "Calories burned"
+        },
+        "distanceMiles": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Distance in miles"
+        },
+        "avgHeartRate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Average heart rate in BPM"
+        },
+        "maxHeartRate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Max heart rate in BPM"
+        },
+        "elevationFeet": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Elevation gain in feet"
         }
       },
       "required": ["activityType"],
@@ -101,6 +121,16 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Body fat percentage"
+        },
+        "restingHeartRate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Resting heart rate in BPM"
+        },
+        "leanBodyMassLbs": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Lean body mass in pounds"
         }
       },
       "minProperties": 1,

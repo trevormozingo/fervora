@@ -3,10 +3,11 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, colors, spacing, floatingButton } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing } from '@/components/ui';
 import { ProfileView, type ProfileData } from '@/components/ProfileView';
 import { type Post } from '@/components/PostCard';
 import { getIdToken } from '@/services/auth';
+import { consumeScrollToPostIntent } from '@/services/scrollToPost';
 import { config } from '@/config';
 
 export default function ProfileScreen() {
@@ -19,6 +20,9 @@ export default function ProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [scrollToPostId, setScrollToPostId] = useState<string | null>(null);
+  const [scrollToPostSection, setScrollToPostSection] = useState<'comments' | 'reactions' | null>(null);
+  const [scrollToReactionType, setScrollToReactionType] = useState<string | undefined>(undefined);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -49,6 +53,17 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Check for scroll-to-post intent from notification tap
+      const intent = consumeScrollToPostIntent();
+      if (intent) {
+        setScrollToPostId(intent.postId);
+        setScrollToPostSection(intent.section);
+        setScrollToReactionType(intent.reactionType);
+      } else {
+        setScrollToPostId(null);
+        setScrollToPostSection(null);
+        setScrollToReactionType(undefined);
+      }
       fetchProfile();
       fetchPosts();
     }, [])
@@ -113,24 +128,20 @@ export default function ProfileScreen() {
 
   return (
     <GradientScreen transparent>
-      <Pressable
-        style={styles.settingsButton}
-        onPress={() => router.push('/settings')}
-      >
-        <Ionicons name="settings-outline" size={24} color={colors.foreground} />
-      </Pressable>
-      <Pressable
-        style={styles.editButton}
-        onPress={() => router.push('/edit-profile')}
-      >
-        <Ionicons name="pencil-outline" size={22} color={colors.foreground} />
-      </Pressable>
-      <Pressable
-        style={styles.addPostButton}
-        onPress={() => router.push('/create-post')}
-      >
-        <Ionicons name="add" size={26} color={colors.foreground} />
-      </Pressable>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }} />
+        <View style={styles.headerActions}>
+          <Pressable style={styles.headerIcon} onPress={() => router.push('/create-post')}>
+            <Ionicons name="add-circle-outline" size={26} color={colors.foreground} />
+          </Pressable>
+          <Pressable style={styles.headerIcon} onPress={() => router.push('/edit-profile')}>
+            <Ionicons name="pencil-outline" size={22} color={colors.foreground} />
+          </Pressable>
+          <Pressable style={styles.headerIcon} onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={22} color={colors.foreground} />
+          </Pressable>
+        </View>
+      </View>
 
       <ProfileView
         profile={profile}
@@ -142,27 +153,35 @@ export default function ProfileScreen() {
         onLoadMore={loadMore}
         onPostChanged={handlePostChanged}
         onDeletePost={handleDeletePost}
+        scrollToPostId={scrollToPostId}
+        scrollToPostSection={scrollToPostSection}
+        scrollToReactionType={scrollToReactionType}
       />
     </GradientScreen>
   );
 }
 
 const styles = StyleSheet.create({
-
-  settingsButton: {
-    ...floatingButton,
-    top: 60,
-    right: spacing.lg,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
-  editButton: {
-    ...floatingButton,
-    top: 112,
-    right: spacing.lg,
+  headerUsername: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.foreground,
   },
-  addPostButton: {
-    ...floatingButton,
-    top: 164,
-    right: spacing.lg,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerIcon: {
+    padding: 6,
   },
   center: {
     flex: 1,

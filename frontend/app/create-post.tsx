@@ -106,6 +106,10 @@ export default function CreatePostScreen() {
   const [activityType, setActivityType] = useState<ActivityType | null>(null);
   const [durationMin, setDurationMin] = useState('');
   const [calories, setCalories] = useState('');
+  const [distance, setDistance] = useState('');
+  const [avgHR, setAvgHR] = useState('');
+  const [maxHR, setMaxHR] = useState('');
+  const [elevation, setElevation] = useState('');
   const [showActivityPicker, setShowActivityPicker] = useState(false);
 
   // ── apple health import ──
@@ -135,6 +139,10 @@ export default function CreatePostScreen() {
     setActivityType(w.activityType);
     setDurationMin(String(Math.round(w.durationSeconds / 60)));
     setCalories(w.caloriesBurned > 0 ? String(w.caloriesBurned) : '');
+    setDistance(w.distanceMiles != null ? String(w.distanceMiles) : '');
+    setAvgHR(w.avgHeartRate != null ? String(w.avgHeartRate) : '');
+    setMaxHR(w.maxHeartRate != null ? String(w.maxHeartRate) : '');
+    setElevation(w.elevationFeet != null ? String(w.elevationFeet) : '');
     setShowHealthPicker(false);
   };
 
@@ -142,6 +150,8 @@ export default function CreatePostScreen() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [weightLbs, setWeightLbs] = useState('');
   const [bodyFat, setBodyFat] = useState('');
+  const [restingHR, setRestingHR] = useState('');
+  const [leanMass, setLeanMass] = useState('');
   const [metricsLoading, setMetricsLoading] = useState(false);
 
   const handleImportMetrics = async () => {
@@ -155,6 +165,8 @@ export default function CreatePostScreen() {
       setShowMetrics(true);
       if (metrics.weightLbs !== null) setWeightLbs(String(metrics.weightLbs));
       if (metrics.bodyFatPercentage !== null) setBodyFat(String(metrics.bodyFatPercentage));
+      if (metrics.restingHeartRate !== null) setRestingHR(String(metrics.restingHeartRate));
+      if (metrics.leanBodyMassLbs !== null) setLeanMass(String(metrics.leanBodyMassLbs));
     } catch (err: any) {
       Alert.alert('Health Error', err.message ?? 'Could not read body metrics');
     } finally {
@@ -175,6 +187,10 @@ export default function CreatePostScreen() {
       const workout: Record<string, unknown> = { activityType };
       if (durationMin.trim()) workout.durationSeconds = Math.round(Number(durationMin) * 60);
       if (calories.trim()) workout.caloriesBurned = Number(calories);
+      if (distance.trim()) workout.distanceMiles = Number(distance);
+      if (avgHR.trim()) workout.avgHeartRate = Number(avgHR);
+      if (maxHR.trim()) workout.maxHeartRate = Number(maxHR);
+      if (elevation.trim()) workout.elevationFeet = Number(elevation);
       data.workout = workout;
     }
 
@@ -182,11 +198,13 @@ export default function CreatePostScreen() {
       const metrics: Record<string, unknown> = {};
       if (weightLbs.trim()) metrics.weightLbs = Number(weightLbs);
       if (bodyFat.trim()) metrics.bodyFatPercentage = Number(bodyFat);
+      if (restingHR.trim()) metrics.restingHeartRate = Number(restingHR);
+      if (leanMass.trim()) metrics.leanBodyMassLbs = Number(leanMass);
       if (Object.keys(metrics).length > 0) data.bodyMetrics = metrics;
     }
 
     return data;
-  }, [title, body, media, showWorkout, activityType, durationMin, calories, showMetrics, weightLbs, bodyFat]);
+  }, [title, body, media, showWorkout, activityType, durationMin, calories, distance, avgHR, maxHR, elevation, showMetrics, weightLbs, bodyFat, restingHR, leanMass]);
 
   const handleSubmit = async () => {
     const data = buildPayload();
@@ -257,7 +275,7 @@ export default function CreatePostScreen() {
     body.trim() ||
     media.length > 0 ||
     (showWorkout && activityType) ||
-    (showMetrics && (weightLbs.trim() || bodyFat.trim()));
+    (showMetrics && (weightLbs.trim() || bodyFat.trim() || restingHR.trim() || leanMass.trim()));
 
   return (
     <GradientScreen>
@@ -437,6 +455,46 @@ export default function CreatePostScreen() {
                   />
                 </View>
               </View>
+              <View style={styles.row}>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Distance (mi)"
+                    placeholder="e.g. 3.1"
+                    keyboardType="decimal-pad"
+                    value={distance}
+                    onChangeText={setDistance}
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Elevation (ft)"
+                    placeholder="e.g. 500"
+                    keyboardType="numeric"
+                    value={elevation}
+                    onChangeText={setElevation}
+                  />
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Avg HR (bpm)"
+                    placeholder="e.g. 145"
+                    keyboardType="numeric"
+                    value={avgHR}
+                    onChangeText={setAvgHR}
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Max HR (bpm)"
+                    placeholder="e.g. 175"
+                    keyboardType="numeric"
+                    value={maxHR}
+                    onChangeText={setMaxHR}
+                  />
+                </View>
+              </View>
             </View>
           )}
 
@@ -485,6 +543,26 @@ export default function CreatePostScreen() {
                     keyboardType="numeric"
                     value={bodyFat}
                     onChangeText={setBodyFat}
+                  />
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Resting HR (bpm)"
+                    placeholder="e.g. 62"
+                    keyboardType="numeric"
+                    value={restingHR}
+                    onChangeText={setRestingHR}
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Input
+                    label="Lean Mass (lbs)"
+                    placeholder="e.g. 157"
+                    keyboardType="numeric"
+                    value={leanMass}
+                    onChangeText={setLeanMass}
                   />
                 </View>
               </View>
@@ -604,7 +682,7 @@ const styles = StyleSheet.create({
   headerClose: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.full,
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
@@ -616,7 +694,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     minWidth: 70,
     alignItems: 'center',
   },
@@ -790,7 +868,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm + 2,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
@@ -857,7 +935,7 @@ const styles = StyleSheet.create({
   pickerItem: {
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.sm + 2,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     backgroundColor: colors.background,
   },
   pickerItemActive: {

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, Text, colors, spacing } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
 import { getIdToken, getUid } from '@/services/auth';
 import { config } from '@/config';
 
@@ -331,13 +331,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   followBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     minWidth: 80,
     alignItems: 'center',
   },

@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 38,
     maxHeight: 120,
-    borderRadius: 19,
+    borderRadius: radii.xl,
     backgroundColor: colors.muted,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.full,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

@@ -44,12 +44,18 @@ const WorkoutSchema = z.object({
   activityType: z.enum(ACTIVITY_TYPES),
   durationSeconds: z.number().int().min(0).nullable().optional(),
   caloriesBurned: z.number().min(0).nullable().optional(),
+  distanceMiles: z.number().min(0).nullable().optional(),
+  avgHeartRate: z.number().min(0).nullable().optional(),
+  maxHeartRate: z.number().min(0).nullable().optional(),
+  elevationFeet: z.number().min(0).nullable().optional(),
 });
 
 const BodyMetricsSchema = z
   .object({
     weightLbs: z.number().min(0).nullable().optional(),
     bodyFatPercentage: z.number().min(0).max(100).nullable().optional(),
+    restingHeartRate: z.number().min(0).nullable().optional(),
+    leanBodyMassLbs: z.number().min(0).nullable().optional(),
   })
   .refine(
     (d) => Object.values(d).some((v) => v !== undefined && v !== null),

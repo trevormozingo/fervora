@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientScreen, Text, colors, spacing, fonts, fontSizes, radii } from '@/components/ui';
 import { getIdToken } from '@/services/auth';
+import { setScrollToPostIntent } from '@/services/scrollToPost';
 import { config } from '@/config';
 
 interface Notification {
@@ -82,10 +83,13 @@ export default function NotificationsScreen() {
       router.push(`/user/${notif.data.followerUsername}` as any);
     } else if (notif.type === 'comment' || notif.type === 'reaction') {
       if (notif.data?.postId) {
-        router.push({ pathname: '/post-detail', params: { postId: notif.data.postId } } as any);
-      } else {
-        router.navigate('/(home)/profile' as any);
+        setScrollToPostIntent(
+          notif.data.postId,
+          notif.type === 'comment' ? 'comments' : 'reactions',
+          notif.data.reactionType,
+        );
       }
+      router.navigate('/(home)/profile' as any);
     } else if (notif.data?.conversationId) {
       router.push({
         pathname: '/conversation',

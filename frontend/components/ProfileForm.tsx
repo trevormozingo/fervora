@@ -428,11 +428,11 @@ const s = StyleSheet.create({
   // Location
   locationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   locationDisplay: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  locationText: { fontSize: 14 },
+  locationText: { fontSize: 13 },
   locationButtons: { flexDirection: 'row', gap: spacing.xs },
   locationButton: {
     backgroundColor: colors.primary, paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2, borderRadius: 8, minWidth: 80, alignItems: 'center',
+    paddingVertical: spacing.xs + 2, borderRadius: radii.sm, minWidth: 80, alignItems: 'center',
   },
   mapButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   locationButtonText: { color: colors.primaryForeground, fontWeight: '600', fontSize: 13 },
@@ -441,7 +441,7 @@ const s = StyleSheet.create({
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   levelChip: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: 20, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.muted,
   },
   levelChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -452,7 +452,7 @@ const s = StyleSheet.create({
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2,
-    borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.muted,
   },
   tagActive: { backgroundColor: colors.primary, borderColor: colors.primary },

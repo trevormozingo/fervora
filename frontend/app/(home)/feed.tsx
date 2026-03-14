@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, Text, colors, spacing } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
 import { PostCard, type Post } from '@/components/PostCard';
 import { getIdToken } from '@/services/auth';
 import { config } from '@/config';
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     top: 2,
     right: 2,
     backgroundColor: colors.primary,
-    borderRadius: 9,
+    borderRadius: radii.full,
     minWidth: 18,
     height: 18,
     justifyContent: 'center',

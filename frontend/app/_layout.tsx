@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { addNotificationResponseListener } from '@/services/notifications';
+import { setScrollToPostIntent } from '@/services/scrollToPost';
 import type { EventSubscription } from 'expo-notifications';
 
 export default function RootLayout() {
@@ -24,10 +25,13 @@ export default function RootLayout() {
         router.push(`/user/${data.followerUsername}` as any);
       } else if (data?.type === 'comment' || data?.type === 'reaction') {
         if (data?.postId) {
-          router.push({ pathname: '/post-detail', params: { postId: data.postId as string } });
-        } else {
-          router.navigate('/(home)/profile' as any);
+          setScrollToPostIntent(
+            data.postId as string,
+            data.type === 'comment' ? 'comments' : 'reactions',
+            data.reactionType as string | undefined,
+          );
         }
+        router.navigate('/(home)/profile' as any);
       }
     });
 
@@ -52,7 +56,6 @@ export default function RootLayout() {
         <Stack.Screen name="new-chat" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="follow-list" />
-        <Stack.Screen name="post-detail" />
       </Stack>
     </>
   );

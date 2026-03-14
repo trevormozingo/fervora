@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, colors, spacing } from '@/components/ui';
+import { Text, colors, spacing, radii } from '@/components/ui';
 import { PostCard, type Post } from '@/components/PostCard';
 import { getIdToken } from '@/services/auth';
 import { config } from '@/config';
@@ -52,6 +52,12 @@ type Props = {
   onFollowToggle?: () => void;
   /** Called when the Message button is pressed */
   onMessage?: () => void;
+  /** If set, auto-scroll to this post ID after posts load */
+  scrollToPostId?: string | null;
+  /** Which section to auto-open on the scrolled-to post */
+  scrollToPostSection?: 'comments' | 'reactions' | null;
+  /** Which specific reaction type to filter to */
+  scrollToReactionType?: string;
 };
 
 export function ProfileView({
@@ -69,11 +75,28 @@ export function ProfileView({
   followLoading,
   onFollowToggle,
   onMessage,
+  scrollToPostId,
+  scrollToPostSection,
+  scrollToReactionType,
 }: Props) {
   const router = useRouter();
   const [photoExpanded, setPhotoExpanded] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+  const hasScrolled = useRef(false);
 
   const followBase = followListParams ?? '';
+
+  // Auto-scroll to a specific post when scrollToPostId is set
+  useEffect(() => {
+    if (!scrollToPostId || posts.length === 0 || hasScrolled.current) return;
+    const index = posts.findIndex((p) => p.id === scrollToPostId);
+    if (index >= 0) {
+      hasScrolled.current = true;
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index, animated: true, viewOffset: 20 });
+      }, 300);
+    }
+  }, [scrollToPostId, posts]);
 
   return (
     <>
@@ -93,6 +116,7 @@ export function ProfileView({
       </Modal>
     )}
     <FlatList
+      ref={flatListRef}
       data={posts}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
@@ -101,10 +125,18 @@ export function ProfileView({
           showAuthor={false}
           onPostChanged={onPostChanged}
           onDeletePost={isOwnProfile ? onDeletePost : undefined}
+          initialSection={item.id === scrollToPostId ? scrollToPostSection : null}
+          initialReactionType={item.id === scrollToPostId ? scrollToReactionType : undefined}
         />
       )}
       onEndReached={onLoadMore}
       onEndReachedThreshold={0.5}
+      extraData={`${scrollToPostId}-${scrollToPostSection}`}
+      onScrollToIndexFailed={(info) => {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewOffset: 20 });
+        }, 500);
+      }}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.profileHeader}>
@@ -305,13 +337,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   followButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xs,
-    borderRadius: 20,
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: radii.sm,
     backgroundColor: colors.primary,
-    minWidth: 100,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    justifyContent: 'center',
   },
   followButtonActive: {
     backgroundColor: 'transparent',
@@ -332,16 +363,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   messageButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    borderRadius: 20,
+    paddingVertical: 10,
+    borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    minWidth: 100,
-    justifyContent: 'center',
   },
   messageButtonText: {
     color: colors.foreground,
@@ -370,7 +400,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     marginTop: spacing.xs,
   },
   levelBadgeText: {
@@ -389,7 +419,7 @@ const styles = StyleSheet.create({
   interestTag: {
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.muted,

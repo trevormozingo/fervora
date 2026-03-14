@@ -32,10 +32,16 @@ export type Post = {
     activityType: ActivityType;
     durationSeconds?: number | null;
     caloriesBurned?: number | null;
+    distanceMiles?: number | null;
+    avgHeartRate?: number | null;
+    maxHeartRate?: number | null;
+    elevationFeet?: number | null;
   } | null;
   bodyMetrics?: {
     weightLbs?: number | null;
     bodyFatPercentage?: number | null;
+    restingHeartRate?: number | null;
+    leanBodyMassLbs?: number | null;
   } | null;
   reactionSummary?: Record<string, number>;
   recentComments?: Comment[];
@@ -346,13 +352,17 @@ type PostCardProps = {
   onPostChanged: (updated: Post) => void;
   /** Called when the user confirms post deletion. */
   onDeletePost?: (postId: string) => void;
+  /** Auto-open this section when the card mounts */
+  initialSection?: 'comments' | 'reactions' | null;
+  /** Which specific reaction type to filter to */
+  initialReactionType?: string;
 };
 
 // ── Component ───────────────────────────────────────────────────────
 
 type ReactionUser = { authorUid: string; username: string; type: string; profilePhoto?: string | null };
 
-export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: PostCardProps) {
+export function PostCard({ post, showAuthor, onPostChanged, onDeletePost, initialSection, initialReactionType }: PostCardProps) {
   const router = useRouter();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -366,6 +376,7 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const prevInitialSection = useRef(initialSection);
 
   const isOwner = post.authorUid === getUid();
 
@@ -445,6 +456,30 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
       setLoadingUsers(false);
     }
   };
+
+  // Auto-open comments or reactions when navigated from a notification
+  useEffect(() => {
+    if (!initialSection || initialSection === prevInitialSection.current) return;
+    prevInitialSection.current = initialSection;
+    if (initialSection === 'comments') {
+      setCommentOpen(true);
+      fetchMoreComments();
+    } else if (initialSection === 'reactions') {
+      setPickerOpen(true);
+      fetchReactionUsers(initialReactionType);
+    }
+  }, [initialSection]);
+
+  // Also handle initial mount
+  useEffect(() => {
+    if (initialSection === 'comments') {
+      setCommentOpen(true);
+      fetchMoreComments();
+    } else if (initialSection === 'reactions') {
+      setPickerOpen(true);
+      fetchReactionUsers(initialReactionType);
+    }
+  }, []);
 
   // ── Comments ──────────────────────────────────────────────────────
 
@@ -599,7 +634,7 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
             </View>
             <Text style={styles.workoutActivity}>{activityLabel(post.workout.activityType)}</Text>
           </View>
-          {(post.workout.durationSeconds || post.workout.caloriesBurned) && (
+          {(post.workout.durationSeconds || post.workout.caloriesBurned || post.workout.distanceMiles || post.workout.avgHeartRate || post.workout.elevationFeet) && (
             <View style={styles.workoutStats}>
               {post.workout.durationSeconds != null && (
                 <View style={styles.workoutStat}>
@@ -616,6 +651,33 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
                   <Text style={styles.workoutStatLabel}>cal</Text>
                 </View>
               )}
+              {post.workout.distanceMiles != null && (
+                <>
+                  <View style={styles.workoutStatDivider} />
+                  <View style={styles.workoutStat}>
+                    <Text style={styles.workoutStatValue}>{post.workout.distanceMiles}</Text>
+                    <Text style={styles.workoutStatLabel}>mi</Text>
+                  </View>
+                </>
+              )}
+              {post.workout.avgHeartRate != null && (
+                <>
+                  <View style={styles.workoutStatDivider} />
+                  <View style={styles.workoutStat}>
+                    <Text style={styles.workoutStatValue}>{post.workout.avgHeartRate}</Text>
+                    <Text style={styles.workoutStatLabel}>avg bpm</Text>
+                  </View>
+                </>
+              )}
+              {post.workout.elevationFeet != null && (
+                <>
+                  <View style={styles.workoutStatDivider} />
+                  <View style={styles.workoutStat}>
+                    <Text style={styles.workoutStatValue}>{post.workout.elevationFeet}</Text>
+                    <Text style={styles.workoutStatLabel}>ft elev</Text>
+                  </View>
+                </>
+              )}
             </View>
           )}
         </LinearGradient>
@@ -623,24 +685,54 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost }: Post
 
       {/* ── Body Metrics ── */}
       {post.bodyMetrics && (
-        <View style={styles.metricsRow}>
-          <Ionicons name="body-outline" size={16} color={colors.primary} />
-          {post.bodyMetrics.weightLbs != null && (
-            <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{post.bodyMetrics.weightLbs}</Text>
-              <Text style={styles.metricLabel}>lbs</Text>
+        <LinearGradient
+          colors={['#1B2838', '#2C3E50', '#34495E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.metricsHero}
+        >
+          <View style={styles.metricsHeaderRow}>
+            <View style={styles.metricsIconCircle}>
+              <Ionicons name="body-outline" size={20} color={colors.primaryForeground} />
             </View>
-          )}
-          {post.bodyMetrics.weightLbs != null && post.bodyMetrics.bodyFatPercentage != null && (
-            <View style={styles.metricDivider} />
-          )}
-          {post.bodyMetrics.bodyFatPercentage != null && (
-            <View style={styles.metricItem}>
-              <Text style={styles.metricValue}>{post.bodyMetrics.bodyFatPercentage}%</Text>
-              <Text style={styles.metricLabel}>body fat</Text>
-            </View>
-          )}
-        </View>
+            <Text style={styles.metricsTitle}>Body Stats</Text>
+          </View>
+          <View style={styles.metricsStats}>
+            {post.bodyMetrics.weightLbs != null && (
+              <View style={styles.workoutStat}>
+                <Text style={styles.workoutStatValue}>{post.bodyMetrics.weightLbs}</Text>
+                <Text style={styles.workoutStatLabel}>lbs</Text>
+              </View>
+            )}
+            {post.bodyMetrics.weightLbs != null && post.bodyMetrics.bodyFatPercentage != null && (
+              <View style={styles.workoutStatDivider} />
+            )}
+            {post.bodyMetrics.bodyFatPercentage != null && (
+              <View style={styles.workoutStat}>
+                <Text style={styles.workoutStatValue}>{post.bodyMetrics.bodyFatPercentage}%</Text>
+                <Text style={styles.workoutStatLabel}>body fat</Text>
+              </View>
+            )}
+            {post.bodyMetrics.restingHeartRate != null && (
+              <>
+                <View style={styles.workoutStatDivider} />
+                <View style={styles.workoutStat}>
+                  <Text style={styles.workoutStatValue}>{post.bodyMetrics.restingHeartRate}</Text>
+                  <Text style={styles.workoutStatLabel}>rhr</Text>
+                </View>
+              </>
+            )}
+            {post.bodyMetrics.leanBodyMassLbs != null && (
+              <>
+                <View style={styles.workoutStatDivider} />
+                <View style={styles.workoutStat}>
+                  <Text style={styles.workoutStatValue}>{post.bodyMetrics.leanBodyMassLbs}</Text>
+                  <Text style={styles.workoutStatLabel}>lbs lean</Text>
+                </View>
+              </>
+            )}
+          </View>
+        </LinearGradient>
       )}
 
       {/* Title */}
@@ -952,7 +1044,7 @@ const styles = StyleSheet.create({
     top: 54,
     right: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
+    borderRadius: radii.xl,
     padding: 6,
     zIndex: 10,
   },
@@ -962,7 +1054,7 @@ const styles = StyleSheet.create({
     top: '50%',
     marginTop: -24,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 24,
+    borderRadius: radii.xl,
     padding: 8,
     zIndex: 10,
   },
@@ -972,7 +1064,7 @@ const styles = StyleSheet.create({
     top: '50%',
     marginTop: -24,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 24,
+    borderRadius: radii.xl,
     padding: 8,
     zIndex: 10,
   },
@@ -987,7 +1079,7 @@ const styles = StyleSheet.create({
   lightboxDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: radii.xs,
     backgroundColor: 'rgba(255,255,255,0.4)',
   },
   lightboxDotActive: {
@@ -1053,35 +1145,36 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: 'rgba(255,255,255,0.25)',
   },
-  // Body metrics
-  metricsRow: {
+  // Body metrics hero
+  metricsHero: {
+    borderRadius: radii.md,
+    overflow: 'hidden' as const,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  metricsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.muted,
   },
-  metricItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
+  metricsIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  metricValue: {
+  metricsTitle: {
     fontSize: fontSizes.lg,
     ...fonts.bold,
-    color: colors.foreground,
+    color: colors.primaryForeground,
   },
-  metricLabel: {
-    fontSize: fontSizes.xs,
-    color: colors.mutedForeground,
-    ...fonts.medium,
-  },
-  metricDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: colors.border,
+  metricsStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingTop: spacing.xs,
   },
   date: {
     fontSize: fontSizes.xs,
@@ -1206,7 +1299,7 @@ const styles = StyleSheet.create({
   },
   bubbleItemSelected: {
     backgroundColor: colors.border,
-    borderRadius: 16,
+    borderRadius: radii.lg,
   },
   bubbleEmoji: {
     fontSize: 28,

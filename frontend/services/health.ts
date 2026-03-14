@@ -15,6 +15,14 @@ export interface HealthWorkout {
   durationSeconds: number;
   /** Calories burned (may be 0 if unavailable) */
   caloriesBurned: number;
+  /** Distance in miles (may be null if unavailable) */
+  distanceMiles: number | null;
+  /** Average heart rate in BPM (may be null if unavailable) */
+  avgHeartRate: number | null;
+  /** Max heart rate in BPM (may be null if unavailable) */
+  maxHeartRate: number | null;
+  /** Elevation gain in feet (may be null if unavailable) */
+  elevationFeet: number | null;
   /** When the workout started */
   startDate: Date;
   /** When the workout ended */
@@ -79,6 +87,8 @@ export function isHealthAvailable(): boolean {
 export interface HealthBodyMetrics {
   weightLbs: number | null;
   bodyFatPercentage: number | null;
+  restingHeartRate: number | null;
+  leanBodyMassLbs: number | null;
   /** Display label, e.g. "185 lbs · 15% BF" */
   label: string;
 }
@@ -95,10 +105,12 @@ export async function fetchBodyMetrics(): Promise<HealthBodyMetrics | null> {
     toRead: [
       'HKQuantityTypeIdentifierBodyMass' as any,
       'HKQuantityTypeIdentifierBodyFatPercentage' as any,
+      'HKQuantityTypeIdentifierRestingHeartRate' as any,
+      'HKQuantityTypeIdentifierLeanBodyMass' as any,
     ],
   });
 
-  const [weightSample, bfSample] = await Promise.all([
+  const [weightSample, bfSample, rhrSample, lbmSample] = await Promise.all([
     HealthKit.getMostRecentQuantitySample(
       'HKQuantityTypeIdentifierBodyMass' as any,
       'lb',
@@ -107,18 +119,30 @@ export async function fetchBodyMetrics(): Promise<HealthBodyMetrics | null> {
       'HKQuantityTypeIdentifierBodyFatPercentage' as any,
       '%',
     ),
+    HealthKit.getMostRecentQuantitySample(
+      'HKQuantityTypeIdentifierRestingHeartRate' as any,
+      'count/min' as any,
+    ),
+    HealthKit.getMostRecentQuantitySample(
+      'HKQuantityTypeIdentifierLeanBodyMass' as any,
+      'lb',
+    ),
   ]);
 
   const weightLbs = weightSample ? Math.round(weightSample.quantity * 10) / 10 : null;
   const bodyFatPercentage = bfSample ? Math.round(bfSample.quantity * 10) / 10 : null;
+  const restingHeartRate = rhrSample ? Math.round(rhrSample.quantity) : null;
+  const leanBodyMassLbs = lbmSample ? Math.round(lbmSample.quantity * 10) / 10 : null;
 
-  if (weightLbs === null && bodyFatPercentage === null) return null;
+  if (weightLbs === null && bodyFatPercentage === null && restingHeartRate === null && leanBodyMassLbs === null) return null;
 
   const parts: string[] = [];
   if (weightLbs !== null) parts.push(`${weightLbs} lbs`);
   if (bodyFatPercentage !== null) parts.push(`${bodyFatPercentage}% BF`);
+  if (restingHeartRate !== null) parts.push(`${restingHeartRate} rhr`);
+  if (leanBodyMassLbs !== null) parts.push(`${leanBodyMassLbs} lbs lean`);
 
-  return { weightLbs, bodyFatPercentage, label: parts.join(' · ') };
+  return { weightLbs, bodyFatPercentage, restingHeartRate, leanBodyMassLbs, label: parts.join(' · ') };
 }
 
 /**
@@ -150,10 +174,30 @@ export async function fetchRecentWorkouts(
     const caloriesBurned = Math.round(s.totalEnergyBurned?.quantity ?? 0);
     const activityType = mapActivityType(s.workoutActivityType);
 
+    // Distance: HealthKit provides in meters, convert to miles
+    const distRaw = (s as any).totalDistance?.quantity ?? null;
+    const distanceMiles = distRaw != null ? Math.round((distRaw / 1609.344) * 100) / 100 : null;
+
+    // Elevation gain (metadata, may not be present)
+    const elevRaw = (s as any).totalFlightsClimbed?.quantity ?? (s as any).metadata?.HKElevationAscended ?? null;
+    const elevationFeet = elevRaw != null ? Math.round(Number(elevRaw) * 3.28084) : null;
+
+    // Heart rate stats from workout events/metadata (may not be present)
+    const avgHeartRate = (s as any).metadata?.HKAverageHeartRate != null
+      ? Math.round(Number((s as any).metadata.HKAverageHeartRate))
+      : null;
+    const maxHeartRate = (s as any).metadata?.HKMaximumHeartRate != null
+      ? Math.round(Number((s as any).metadata.HKMaximumHeartRate))
+      : null;
+
     return {
       activityType,
       durationSeconds,
       caloriesBurned,
+      distanceMiles,
+      avgHeartRate,
+      maxHeartRate,
+      elevationFeet,
       startDate: start,
       endDate: end,
       label: buildLabel(activityType, durationSeconds, caloriesBurned),

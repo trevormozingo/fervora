@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: colors.muted,
-    borderRadius: 16,
+    borderRadius: radii.lg,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
   },
