@@ -25,11 +25,13 @@ import {
   type MediaItem,
 } from '@/models/post';
 import { isHealthAvailable, fetchRecentWorkouts, fetchBodyMetrics, type HealthWorkout } from '@/services/health';
-import { getIdToken } from '@/services/auth';
+import { getIdToken, getUid } from '@/services/auth';
 import { uploadPostMedia } from '@/services/storage';
 import { config } from '@/config';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function CreatePostScreen() {
+  const queryClient = useQueryClient();
   const router = useRouter();
 
   // ── media ──
@@ -262,6 +264,11 @@ export default function CreatePostScreen() {
       }
 
       console.log('Post created');
+      queryClient.invalidateQueries({ queryKey: ['myPosts'] });
+      queryClient.invalidateQueries({ queryKey: ['myPostStats'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      const uid = getUid();
+      if (uid) queryClient.invalidateQueries({ queryKey: ['tracking', uid] });
       router.back();
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Something went wrong');
@@ -694,7 +701,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.xl,
+    borderRadius: radii.full,
     minWidth: 70,
     alignItems: 'center',
   },
@@ -868,7 +875,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm + 2,
-    borderRadius: radii.lg,
+    borderRadius: radii.full,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
@@ -935,7 +942,7 @@ const styles = StyleSheet.create({
   pickerItem: {
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.sm + 2,
-    borderRadius: radii.lg,
+    borderRadius: radii.full,
     backgroundColor: colors.background,
   },
   pickerItemActive: {

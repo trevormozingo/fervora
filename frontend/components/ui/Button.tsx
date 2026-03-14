@@ -62,7 +62,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radii.md,
+    borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

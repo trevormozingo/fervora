@@ -22,13 +22,23 @@ export default function FeedScreen() {
     queryKey: ['feed'],
     queryFn: async () => {
       const data = await apiFetch<FeedPage>('/feed?limit=20');
-      // Reset pagination state when initial page refreshes
-      setCursor(data.cursor);
-      setHasMore(data.count === 20);
-      setExtraPosts([]);
       return data;
     },
   });
+
+  // Sync pagination state from cached query data
+  const feedCursor = feedData?.cursor ?? null;
+  const feedHasMore = feedData ? feedData.count === 20 : true;
+
+  // Reset pagination extras when feed query refreshes
+  const feedItemIds = feedData?.items?.map((p) => p.id).join(',');
+  const [lastFeedIds, setLastFeedIds] = useState<string | undefined>(undefined);
+  if (feedItemIds !== undefined && feedItemIds !== lastFeedIds) {
+    setLastFeedIds(feedItemIds);
+    setCursor(feedCursor);
+    setHasMore(feedHasMore);
+    setExtraPosts([]);
+  }
 
   const posts = [...(feedData?.items ?? []), ...extraPosts];
 

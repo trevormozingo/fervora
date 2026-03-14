@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing, radii, fonts, fontSizes } from '@/components/ui';
 import { getUid } from '@/services/auth';
 import { apiFetch } from '@/services/api';
 
@@ -41,11 +41,9 @@ export default function FollowListScreen() {
   const [tab, setTab] = useState<Tab>(
     initialTab === 'following' ? 'following' : 'followers',
   );
-  const [followers, setFollowers] = useState<FollowUser[]>([]);
-  const [following, setFollowing] = useState<FollowUser[]>([]);
   const [myFollowingSet, setMyFollowingSet] = useState<Set<string>>(new Set());
   const [followLoadingIds, setFollowLoadingIds] = useState<Set<string>>(new Set());
-  const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
+  const [followSetInitialized, setFollowSetInitialized] = useState(false);
 
   /** Toggle follow / unfollow for a user */
   const toggleFollow = useCallback(async (targetUid: string) => {
@@ -71,7 +69,7 @@ export default function FollowListScreen() {
     }
   }, [myFollowingSet]);
 
-  const { isLoading } = useQuery({
+  const { data: queryData, isLoading } = useQuery({
     queryKey: ['followList', uid ?? 'me'],
     queryFn: async () => {
       const followersUrl = uid ? `/follows/${uid}/followers` : '/follows/followers';
@@ -82,16 +80,25 @@ export default function FollowListScreen() {
         apiFetch<{ following: { id: string }[] }>('/follows/following'),
         apiFetch<{ location?: { coordinates?: [number, number] } }>('/profile'),
       ]);
-      setFollowers(followersData.followers);
-      setFollowing(followingData.following);
       setMyFollowingSet(new Set(myFollowingData.following.map((u) => u.id)));
-      if (profileData.location?.coordinates) {
-        setMyLocation(profileData.location.coordinates);
-      }
-      return true;
+      return {
+        followers: followersData.followers,
+        following: followingData.following,
+        myFollowingIds: myFollowingData.following.map((u) => u.id),
+        myLocation: profileData.location?.coordinates ?? null,
+      };
     },
   });
 
+  // Initialize follow set from cached query data on mount
+  if (queryData?.myFollowingIds && !followSetInitialized) {
+    setMyFollowingSet(new Set(queryData.myFollowingIds));
+    setFollowSetInitialized(true);
+  }
+
+  const followers = queryData?.followers ?? [];
+  const following = queryData?.following ?? [];
+  const myLocation = queryData?.myLocation ?? null;
   const data = tab === 'followers' ? followers : following;
 
   const renderItem = ({ item }: { item: FollowUser }) => {
@@ -104,7 +111,7 @@ export default function FollowListScreen() {
 
     return (
       <Pressable
-        style={styles.userRow}
+        style={styles.userCard}
         onPress={() => router.push(`/user/${item.username}` as any)}
       >
         {item.profilePhoto ? (
@@ -118,17 +125,17 @@ export default function FollowListScreen() {
         )}
         <View style={styles.userInfo}>
           <Text style={styles.displayName}>{item.displayName}</Text>
-          <Text muted>@{item.username}</Text>
+          <Text muted style={styles.username}>@{item.username}</Text>
           {(item.location?.label || dist != null) && (
             <View style={styles.locationRow}>
               {item.location?.label && (
                 <>
-                  <Ionicons name="location-outline" size={12} color={colors.mutedForeground} />
+                  <Ionicons name="location" size={11} color={colors.brandRed} />
                   <Text muted style={styles.locationText}>{item.location.label}</Text>
                 </>
               )}
               {dist != null && (
-                <Text muted style={styles.locationText}>
+                <Text muted style={styles.distText}>
                   {item.location?.label ? ' · ' : ''}{formatDistance(dist)}
                 </Text>
               )}
@@ -156,37 +163,33 @@ export default function FollowListScreen() {
 
   return (
     <GradientScreen>
+      {/* ── Header ── */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.foreground} />
         </Pressable>
+        <Text style={styles.headerTitle}>
+          {tab === 'followers' ? 'Followers' : 'Following'}
+        </Text>
+        <View style={styles.backButton} />
       </View>
 
+      {/* ── Tab pills ── */}
       <View style={styles.tabRow}>
         <Pressable
-          style={[styles.tab, tab === 'followers' && styles.tabActive]}
+          style={[styles.tabPill, tab === 'followers' && styles.tabPillActive]}
           onPress={() => setTab('followers')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              tab === 'followers' && styles.tabTextActive,
-            ]}
-          >
-            Followers
+          <Text style={[styles.tabText, tab === 'followers' && styles.tabTextActive]}>
+            Followers{!isLoading ? ` (${followers.length})` : ''}
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.tab, tab === 'following' && styles.tabActive]}
+          style={[styles.tabPill, tab === 'following' && styles.tabPillActive]}
           onPress={() => setTab('following')}
         >
-          <Text
-            style={[
-              styles.tabText,
-              tab === 'following' && styles.tabTextActive,
-            ]}
-          >
-            Following
+          <Text style={[styles.tabText, tab === 'following' && styles.tabTextActive]}>
+            Following{!isLoading ? ` (${following.length})` : ''}
           </Text>
         </Pressable>
       </View>
@@ -194,6 +197,7 @@ export default function FollowListScreen() {
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text muted style={styles.loadingText}>Loading…</Text>
         </View>
       ) : (
         <FlatList
@@ -203,10 +207,20 @@ export default function FollowListScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text muted>
+              <View style={styles.emptyIcon}>
+                <Ionicons
+                  name={tab === 'followers' ? 'people-outline' : 'person-add-outline'}
+                  size={48}
+                  color={colors.mutedForeground}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {tab === 'followers' ? 'No Followers Yet' : 'Not Following Anyone'}
+              </Text>
+              <Text muted style={styles.emptySubtitle}>
                 {tab === 'followers'
-                  ? 'No followers yet.'
-                  : "You're not following anyone yet."}
+                  ? 'When people follow this account,\nthey\'ll show up here.'
+                  : 'Follow people to see them here.'}
               </Text>
             </View>
           }
@@ -216,82 +230,108 @@ export default function FollowListScreen() {
   );
 }
 
+const AVATAR_SIZE = 48;
+
 const styles = StyleSheet.create({
+  // ── Header ──
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: fontSizes.xl,
+    ...fonts.bold,
+    color: colors.foreground,
   },
   backButton: {
-    padding: spacing.xs,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
   },
+
+  // ── Tab pills ──
   tabRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderRadius: radii.full,
+    padding: 3,
   },
-  tab: {
+  tabPill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
   },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: colors.foreground,
+  tabPillActive: {
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
   tabText: {
     color: colors.mutedForeground,
-    fontWeight: '500',
+    ...fonts.medium,
+    fontSize: fontSizes.sm,
   },
   tabTextActive: {
     color: colors.foreground,
-    fontWeight: '700',
+    ...fonts.semibold,
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: spacing['2xl'],
-  },
+
+  // ── List ──
   listContent: {
     paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
-  userRow: {
+
+  // ── User card ──
+  userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.muted,
-    marginRight: spacing.md,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
   },
   avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.muted,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
   },
   avatarText: {
-    fontWeight: '700',
-    fontSize: 18,
-    color: colors.foreground,
+    color: '#fff',
+    ...fonts.bold,
+    fontSize: fontSizes.base,
   },
   userInfo: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   displayName: {
-    fontWeight: '600',
+    ...fonts.semibold,
+    fontSize: fontSizes.base,
     color: colors.foreground,
+  },
+  username: {
+    fontSize: fontSizes.sm,
   },
   locationRow: {
     flexDirection: 'row',
@@ -300,27 +340,66 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   locationText: {
-    fontSize: 13,
+    fontSize: fontSizes.xs,
   },
+  distText: {
+    fontSize: fontSizes.xs,
+  },
+
+  // ── Follow button ──
   followBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.sm,
-    minWidth: 80,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    minWidth: 84,
     alignItems: 'center',
   },
   followBtnActive: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
   },
   followBtnText: {
     color: colors.primaryForeground,
-    fontWeight: '600',
-    fontSize: 13,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
   followBtnTextActive: {
     color: colors.foreground,
+  },
+
+  // ── Center / empty states ──
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSizes.sm,
+  },
+  emptyIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: fontSizes.lg,
+    ...fonts.semibold,
+    color: colors.foreground,
+    marginBottom: spacing.xs,
+  },
+  emptySubtitle: {
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

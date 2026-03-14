@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { addNotificationResponseListener } from '@/services/notifications';
+import { addNotificationResponseListener, addNotificationReceivedListener } from '@/services/notifications';
 import { setScrollToPostIntent } from '@/services/scrollToPost';
 import type { EventSubscription } from 'expo-notifications';
 
@@ -20,8 +20,15 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const router = useRouter();
   const notifListenerRef = useRef<EventSubscription>();
+  const fgListenerRef = useRef<EventSubscription>();
 
   useEffect(() => {
+    // Refresh badge + notification list when a push arrives in the foreground
+    fgListenerRef.current = addNotificationReceivedListener(() => {
+      queryClient.invalidateQueries({ queryKey: ['unreadNotifCount'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
     // Handle notification taps → navigate based on type
     notifListenerRef.current = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
@@ -49,6 +56,7 @@ export default function RootLayout() {
 
     return () => {
       notifListenerRef.current?.remove();
+      fgListenerRef.current?.remove();
     };
   }, []);
 

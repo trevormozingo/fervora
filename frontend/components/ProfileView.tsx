@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, colors, spacing, radii } from '@/components/ui';
+import { Text, colors, spacing, radii, fonts, fontSizes } from '@/components/ui';
 import { PostCard, type Post } from '@/components/PostCard';
 import { TrackingView } from '@/components/TrackingView';
 
@@ -57,6 +57,12 @@ type Props = {
   scrollToPostSection?: 'comments' | 'reactions' | null;
   /** Which specific reaction type to filter to */
   scrollToReactionType?: string;
+  /** Server-side aggregate stats */
+  postStats?: { postCount: number; reactionCount: number; commentCount: number } | null;
+  /** Called on pull-to-refresh */
+  onRefresh?: () => Promise<void>;
+  /** Whether a refresh is in progress */
+  isRefreshing?: boolean;
 };
 
 export function ProfileView({
@@ -77,6 +83,9 @@ export function ProfileView({
   scrollToPostId,
   scrollToPostSection,
   scrollToReactionType,
+  postStats,
+  onRefresh,
+  isRefreshing = false,
 }: Props) {
   const router = useRouter();
   const [photoExpanded, setPhotoExpanded] = useState(false);
@@ -183,13 +192,13 @@ export function ProfileView({
     <Text muted>Could not load profile.</Text>
   );
 
-  // ── Derived post stats ──
-  const totalPosts = posts.length;
-  const totalReactions = posts.reduce(
+  // ── Post stats (prefer server-side, fall back to loaded posts) ──
+  const totalPosts = postStats?.postCount ?? posts.length;
+  const totalReactions = postStats?.reactionCount ?? posts.reduce(
     (sum, p) => sum + Object.values(p.reactionSummary ?? {}).reduce((a, b) => a + b, 0),
     0,
   );
-  const totalComments = posts.reduce((sum, p) => sum + (p.commentCount ?? 0), 0);
+  const totalComments = postStats?.commentCount ?? posts.reduce((sum, p) => sum + (p.commentCount ?? 0), 0);
 
   const renderHeader = () => (
     <View>
@@ -281,6 +290,11 @@ export function ProfileView({
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
         extraData={`${scrollToPostId}-${scrollToPostSection}`}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          ) : undefined
+        }
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
             flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewOffset: 20 });
@@ -352,7 +366,7 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontSize: 32,
-    fontWeight: '700',
+    ...fonts.bold,
     color: '#fff',
   },
   bio: {
@@ -375,7 +389,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   followCount: {
-    fontWeight: '700',
+    ...fonts.bold,
     color: colors.foreground,
   },
   followTap: {
@@ -395,21 +409,21 @@ const styles = StyleSheet.create({
   },
   followButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followButtonActive: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
   },
   followButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+    color: colors.primaryForeground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
   followButtonTextActive: {
     color: colors.foreground,
@@ -425,15 +439,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   messageButtonText: {
     color: colors.foreground,
-    fontWeight: '600',
-    fontSize: 14,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
   lightboxOverlay: {
     flex: 1,

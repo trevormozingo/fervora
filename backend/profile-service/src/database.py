@@ -256,6 +256,19 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
             return doc
 
 
+async def get_user_post_stats(uid: str) -> dict[str, int]:
+    """Return aggregate post/reaction/comment counts for a user."""
+    post_ids = []
+    async for doc in _posts().find({"authorUid": uid}, {"_id": 1}):
+        post_ids.append(doc["_id"])
+    post_count = len(post_ids)
+    if post_count == 0:
+        return {"postCount": 0, "reactionCount": 0, "commentCount": 0}
+    reaction_count = await _reactions().count_documents({"postId": {"$in": post_ids}})
+    comment_count = await _comments().count_documents({"postId": {"$in": post_ids}})
+    return {"postCount": post_count, "reactionCount": reaction_count, "commentCount": comment_count}
+
+
 async def get_user_posts(
     uid: str, *, limit: int = 20, cursor: str | None = None, viewer_uid: str | None = None
 ) -> list[dict[str, Any]]:

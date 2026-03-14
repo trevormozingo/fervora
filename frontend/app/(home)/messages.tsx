@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Alert, Animated, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientScreen, Text, colors, spacing, fonts, fontSizes, radii, floatingButton } from '@/components/ui';
@@ -134,7 +134,7 @@ export default function MessagesScreen() {
 
       return (
         <Pressable
-          style={styles.row}
+          style={styles.conversationCard}
           onPress={() =>
             router.push({
               pathname: '/conversation',
@@ -147,21 +147,19 @@ export default function MessagesScreen() {
           <View style={styles.rowContent}>
             <View style={styles.rowHeader}>
               <Text style={[styles.username, item.unread && styles.unreadText]} numberOfLines={1}>{displayName}</Text>
-              <View style={styles.rowRight}>
-                {item.unread && <View style={styles.unreadDot} />}
-                <Text style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
-              </View>
+              <Text muted style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
             </View>
             {item.lastMessage ? (
-              <Text style={styles.preview} numberOfLines={1}>
+              <Text style={[styles.preview, item.unread && styles.previewUnread]} numberOfLines={1}>
                 {item.lastMessage}
               </Text>
             ) : (
-              <Text style={[styles.preview, { fontStyle: 'italic' }]}>
+              <Text muted style={[styles.preview, { fontStyle: 'italic' }]}>
                 No messages yet
               </Text>
             )}
           </View>
+          {item.unread && <View style={styles.unreadDot} />}
         </Pressable>
       );
     },
@@ -170,6 +168,7 @@ export default function MessagesScreen() {
 
   return (
     <GradientScreen transparent>
+      {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
         <Pressable
@@ -177,18 +176,27 @@ export default function MessagesScreen() {
           onPress={() => router.push('/new-chat')}
           hitSlop={12}
         >
-          <Ionicons name="create-outline" size={24} color={colors.foreground} />
+          <Ionicons name="create-outline" size={22} color={colors.foreground} />
         </Pressable>
       </View>
+
       {loading ? (
         <View style={styles.center}>
-          <Text muted>Loading…</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text muted style={styles.loadingText}>Loading conversations…</Text>
         </View>
       ) : conversations.length === 0 ? (
         <View style={styles.center}>
-          <Text muted>No conversations yet.</Text>
-          <Pressable onPress={() => router.push('/new-chat')}>
-            <Text style={styles.startChat}>Start a chat</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="chatbubbles-outline" size={48} color={colors.mutedForeground} />
+          </View>
+          <Text style={styles.emptyTitle}>No Conversations</Text>
+          <Text muted style={styles.emptySubtitle}>
+            Start a chat with someone{"\n"}to see it here.
+          </Text>
+          <Pressable onPress={() => router.push('/new-chat')} style={styles.primaryPill}>
+            <Ionicons name="chatbubble-ellipses" size={16} color={colors.primaryForeground} />
+            <Text style={styles.pillText}>Start a Chat</Text>
           </Pressable>
         </View>
       ) : (
@@ -203,49 +211,62 @@ export default function MessagesScreen() {
   );
 }
 
+const AVATAR_SIZE = 50;
+
 const styles = StyleSheet.create({
+  // ── Header ──
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   title: {
     fontSize: fontSizes['2xl'],
     ...fonts.bold,
     color: colors.foreground,
   },
-  center: {
-    flex: 1,
+  composeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
   },
+
+  // ── List ──
   list: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
-  row: {
+
+  // ── Conversation card ──
+  conversationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     gap: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarPhoto: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
   },
   stackedPhotoBack: {
     width: 34,
@@ -263,52 +284,96 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     borderWidth: 2,
-    borderColor: colors.background,
+    borderColor: '#fff',
   },
   rowContent: {
     flex: 1,
+    overflow: 'hidden',
     gap: 2,
   },
   rowHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   username: {
     fontSize: fontSizes.base,
     ...fonts.semibold,
     color: colors.foreground,
+    flexShrink: 1,
+    marginRight: spacing.sm,
   },
   time: {
     fontSize: fontSizes.xs,
-    color: colors.mutedForeground,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexShrink: 0,
+    marginLeft: 'auto',
   },
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.primary,
+    marginLeft: spacing.xs,
   },
   unreadText: {
-    color: colors.foreground,
     ...fonts.bold,
   },
   preview: {
     fontSize: fontSizes.sm,
     color: colors.mutedForeground,
   },
-  composeBtn: {
-    padding: spacing.xs,
+  previewUnread: {
+    color: colors.foreground,
+    ...fonts.medium,
   },
-  startChat: {
-    fontSize: fontSizes.base,
+
+  // ── Center / empty states ──
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSizes.sm,
+  },
+  emptyIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: fontSizes.lg,
     ...fonts.semibold,
-    color: colors.primary,
-    marginTop: spacing.sm,
+    color: colors.foreground,
+    marginBottom: spacing.xs,
+  },
+  emptySubtitle: {
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Pill buttons ──
+  primaryPill: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pillText: {
+    color: colors.primaryForeground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
 });

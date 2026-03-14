@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,13 +29,18 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: notifications = [], isLoading } = useQuery({
+  const { data: notifications = [], isLoading, isRefetching } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
       const data = await apiFetch<{ items: Notification[] }>('/profile/notifications?limit=50');
       return data.items;
     },
+    refetchOnMount: 'always',
   });
+
+  const onRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  }, [queryClient]);
 
   // Mark all as read on focus
   useFocusEffect(
@@ -147,6 +152,9 @@ export default function NotificationsScreen() {
           keyExtractor={(n) => n.id}
           renderItem={renderNotification}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
         />
       )}
     </GradientScreen>

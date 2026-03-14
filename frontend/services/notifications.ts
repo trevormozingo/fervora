@@ -131,10 +131,18 @@ export async function sendPushToUsers(
 
 /**
  * Subscribe to notification taps (when user taps a notification to open the app).
- * Returns an unsubscribe function.
  */
 export function addNotificationResponseListener(
   handler: (response: Notifications.NotificationResponse) => void,
 ): Notifications.EventSubscription {
   return Notifications.addNotificationResponseReceivedListener(handler);
+}
+
+/**
+ * Subscribe to notifications received while the app is in the foreground.
+ */
+export function addNotificationReceivedListener(
+  handler: (notification: Notifications.Notification) => void,
+): Notifications.EventSubscription {
+  return Notifications.addNotificationReceivedListener(handler);
 }

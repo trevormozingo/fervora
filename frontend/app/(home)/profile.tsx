@@ -42,16 +42,29 @@ export default function ProfileScreen() {
   });
 
   // ── Own posts (cached first page) ──
-  const { data: postsData, isLoading: postsLoading } = useQuery({
+  const { data: postsData, isLoading: postsLoading, isRefetching: postsRefetching } = useQuery({
     queryKey: ['myPosts'],
-    queryFn: async () => {
-      const data = await apiFetch<PostsPage>('/posts?limit=20');
-      setCursor(data.cursor);
-      setHasMore(data.count === 20);
-      setExtraPosts([]);
-      return data;
-    },
+    queryFn: () => apiFetch<PostsPage>('/posts?limit=20'),
+    refetchOnMount: 'always',
   });
+
+  // ── Aggregate post stats (server-side totals) ──
+  const { data: postStats } = useQuery({
+    queryKey: ['myPostStats'],
+    queryFn: () => apiFetch<{ postCount: number; reactionCount: number; commentCount: number }>('/posts/stats'),
+  });
+
+  // Sync pagination state from cached query data
+  const postsCursor = postsData?.cursor ?? null;
+  const postsHasMore = postsData ? postsData.count === 20 : true;
+  const postsItemIds = postsData?.items?.map((p) => p.id).join(',');
+  const [lastPostIds, setLastPostIds] = useState<string | undefined>(undefined);
+  if (postsItemIds !== undefined && postsItemIds !== lastPostIds) {
+    setLastPostIds(postsItemIds);
+    setCursor(postsCursor);
+    setHasMore(postsHasMore);
+    setExtraPosts([]);
+  }
 
   const posts = [...(postsData?.items ?? []), ...extraPosts];
 
@@ -68,7 +81,10 @@ export default function ProfileScreen() {
         setScrollToPostSection(null);
         setScrollToReactionType(undefined);
       }
-    }, [])
+      // Only refetch if data is stale (respects staleTime)
+      queryClient.refetchQueries({ queryKey: ['myPosts'], type: 'active', stale: true });
+      queryClient.refetchQueries({ queryKey: ['myPostStats'], type: 'active', stale: true });
+    }, [queryClient])
   );
 
   // ── Pagination ──
@@ -87,6 +103,14 @@ export default function ProfileScreen() {
     }
   }, [hasMore, loadingMore, cursor]);
 
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['myPosts'] }),
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] }),
+      queryClient.invalidateQueries({ queryKey: ['myPostStats'] }),
+    ]);
+  }, [queryClient]);
+
   const handlePostChanged = (updated: Post) => {
     queryClient.setQueryData<PostsPage>(['myPosts'], (old) =>
       old ? { ...old, items: old.items.map((p) => (p.id === updated.id ? updated : p)) } : old
@@ -101,6 +125,10 @@ export default function ProfileScreen() {
         old ? { ...old, items: old.items.filter((p) => p.id !== postId) } : old
       );
       setExtraPosts((prev) => prev.filter((p) => p.id !== postId));
+      queryClient.invalidateQueries({ queryKey: ['myPostStats'] });
+      if (profileBundle?.profile?.id) {
+        queryClient.invalidateQueries({ queryKey: ['tracking', profileBundle.profile.id] });
+      }
     } catch {
       // ignore
     }
@@ -146,6 +174,9 @@ export default function ProfileScreen() {
         scrollToPostId={scrollToPostId}
         scrollToPostSection={scrollToPostSection}
         scrollToReactionType={scrollToReactionType}
+        postStats={postStats ?? null}
+        onRefresh={onRefresh}
+        isRefreshing={postsRefetching}
       />
     </GradientScreen>
   );

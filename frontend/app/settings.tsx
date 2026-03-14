@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
-import { GradientScreen, Text, colors, spacing, radii } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing, radii, fonts, fontSizes } from '@/components/ui';
 import { signOut, deleteFirebaseAccount, getIdToken } from '@/services/auth';
 import { stopUnreadListener } from '@/services/unread';
 import { config } from '@/config';
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    ...fonts.semibold,
     color: colors.mutedForeground,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -238,8 +238,10 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
   card: {
-    backgroundColor: colors.muted,
-    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
   },
   row: {
@@ -287,12 +289,14 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.muted,
-    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   dangerText: {
     fontSize: 16,
-    fontWeight: '500',
+    ...fonts.medium,
     color: colors.primary,
   },
 });

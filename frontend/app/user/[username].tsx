@@ -22,7 +22,6 @@ export default function UserProfileScreen() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
   // ── Profile data (cached by username) ──
@@ -42,24 +41,39 @@ export default function UserProfileScreen() {
         apiFetch<{ following: { id: string }[] }>('/follows/following'),
       ]);
       const amFollowing = myFollowing.following.some((u) => u.id === profile!.id);
-      setIsFollowing(amFollowing);
-      return { followersCount: followers.count, followingCount: following.count };
+      return { followersCount: followers.count, followingCount: following.count, isFollowing: amFollowing };
     },
     enabled: !!profile?.id,
   });
 
+  const isFollowing = followData?.isFollowing ?? false;
+
   // ── User's posts (cached first page by uid) ──
-  const { data: postsData, isLoading: postsLoading } = useQuery({
+  const { data: postsData, isLoading: postsLoading, isRefetching: postsRefetching } = useQuery({
     queryKey: ['userPosts', profile?.id],
-    queryFn: async () => {
-      const data = await apiFetch<PostsPage>(`/posts/user/${profile!.id}?limit=20`);
-      setCursor(data.cursor);
-      setHasMore(data.count === 20);
-      setExtraPosts([]);
-      return data;
-    },
+    queryFn: () => apiFetch<PostsPage>(`/posts/user/${profile!.id}?limit=20`),
+    enabled: !!profile?.id,
+    refetchOnMount: 'always',
+  });
+
+  // ── Aggregate post stats (server-side totals) ──
+  const { data: userPostStats } = useQuery({
+    queryKey: ['userPostStats', profile?.id],
+    queryFn: () => apiFetch<{ postCount: number; reactionCount: number; commentCount: number }>(`/posts/user/${profile!.id}/stats`),
     enabled: !!profile?.id,
   });
+
+  // Sync pagination state from cached query data
+  const postsCursor = postsData?.cursor ?? null;
+  const postsHasMore = postsData ? postsData.count === 20 : true;
+  const postsItemIds = postsData?.items?.map((p) => p.id).join(',');
+  const [lastPostIds, setLastPostIds] = useState<string | undefined>(undefined);
+  if (postsItemIds !== undefined && postsItemIds !== lastPostIds) {
+    setLastPostIds(postsItemIds);
+    setCursor(postsCursor);
+    setHasMore(postsHasMore);
+    setExtraPosts([]);
+  }
 
   const posts = [...(postsData?.items ?? []), ...extraPosts];
 
@@ -79,17 +93,39 @@ export default function UserProfileScreen() {
     }
   }, [hasMore, loadingMore, cursor, profile]);
 
+  // Refetch posts when the screen gains focus (only if stale)
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile?.id) return;
+      queryClient.refetchQueries({ queryKey: ['userPosts', profile.id], type: 'active', stale: true });
+      queryClient.refetchQueries({ queryKey: ['userPostStats', profile.id], type: 'active', stale: true });
+    }, [queryClient, profile?.id])
+  );
+
+  const onRefresh = useCallback(async () => {
+    if (!profile?.id) return;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['userPosts', profile.id] }),
+      queryClient.invalidateQueries({ queryKey: ['userProfile', username] }),
+      queryClient.invalidateQueries({ queryKey: ['userFollowData', profile.id] }),
+      queryClient.invalidateQueries({ queryKey: ['userPostStats', profile.id] }),
+    ]);
+  }, [queryClient, profile?.id, username]);
+
   const handleFollow = async () => {
     if (!profile || followLoading) return;
     setFollowLoading(true);
     try {
       const method = isFollowing ? 'DELETE' : 'POST';
       await apiFetch(`/follows/${profile.id}`, { method });
-      setIsFollowing(!isFollowing);
-      // Update cached follow data
-      queryClient.setQueryData<{ followersCount: number; followingCount: number }>(
+      // Update cached follow data (including isFollowing flag)
+      queryClient.setQueryData<{ followersCount: number; followingCount: number; isFollowing: boolean }>(
         ['userFollowData', profile.id],
-        (old) => old ? { ...old, followersCount: old.followersCount + (isFollowing ? -1 : 1) } : old
+        (old) => old ? {
+          ...old,
+          followersCount: old.followersCount + (isFollowing ? -1 : 1),
+          isFollowing: !isFollowing,
+        } : old
       );
     } catch {
       // ignore
@@ -152,6 +188,9 @@ export default function UserProfileScreen() {
         followLoading={followLoading}
         onFollowToggle={profile?.id !== getUid() ? handleFollow : undefined}
         onMessage={profile?.id !== getUid() ? handleMessage : undefined}
+        postStats={userPostStats ?? null}
+        onRefresh={onRefresh}
+        isRefreshing={postsRefetching}
       />
     </GradientScreen>
   );
