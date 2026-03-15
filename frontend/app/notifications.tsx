@@ -23,6 +23,8 @@ const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   reaction: 'heart',
   message: 'mail',
   follow: 'person-add',
+  event_invite: 'calendar',
+  event_rsvp: 'calendar',
 };
 
 export default function NotificationsScreen() {
@@ -72,8 +74,11 @@ export default function NotificationsScreen() {
   };
 
   const handlePress = (notif: Notification) => {
-    if (notif.type === 'follow' && notif.data?.followerUsername) {
-      // Navigate to the follower's profile
+    if (notif.type === 'event_invite' || notif.type === 'event_rsvp') {
+      if (notif.data?.eventId) {
+        router.push({ pathname: '/event/[id]', params: { id: notif.data.eventId } } as any);
+      }
+    } else if (notif.type === 'follow' && notif.data?.followerUsername) {
       router.push(`/user/${notif.data.followerUsername}` as any);
     } else if (notif.type === 'comment' || notif.type === 'reaction') {
       if (notif.data?.postId) {
@@ -104,13 +109,18 @@ export default function NotificationsScreen() {
           style={[styles.row, !item.read && styles.unreadRow]}
           onPress={() => handlePress(item)}
         >
-          {photo ? (
-            <Image source={{ uri: photo }} style={styles.avatarPhoto} />
-          ) : (
-            <View style={[styles.iconCircle, !item.read && styles.unreadIcon]}>
-              <Ionicons name={iconName} size={18} color={!item.read ? '#fff' : colors.mutedForeground} />
+          <View style={styles.avatarContainer}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={styles.avatarPhoto} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Ionicons name="person" size={18} color={colors.mutedForeground} />
+              </View>
+            )}
+            <View style={[styles.typeBadge, !item.read && styles.typeBadgeUnread]}>
+              <Ionicons name={iconName} size={10} color={!item.read ? '#fff' : colors.mutedForeground} />
             </View>
-          )}
+          </View>
           <View style={styles.content}>
             <Text style={[styles.title, !item.read && styles.unreadTitle]} numberOfLines={2}>
               {item.title}
@@ -206,14 +216,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
   },
-  avatarPhoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  avatarContainer: {
+    position: 'relative',
+    width: 40,
+    height: 40,
     marginTop: 2,
   },
-  unreadIcon: {
-    backgroundColor: colors.primary,
+  avatarPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typeBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  typeBadgeUnread: {
+    backgroundColor: colors.brandRed,
   },
   content: {
     flex: 1,

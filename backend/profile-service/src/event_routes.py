@@ -13,9 +13,12 @@ from datetime import datetime
 
 from .database import (
     create_event,
+    create_notification,
     delete_event,
     get_event,
     get_invited_events,
+    get_profile_by_id,
+    get_push_tokens,
     get_user_events,
     rsvp_event,
 )
@@ -48,6 +51,35 @@ async def create(request: Request, x_user_id: str = Header(...)):
     doc = await create_event(x_user_id, body)
     if doc is None:
         raise HTTPException(status_code=403, detail="Profile required to create events")
+
+    # Send in-app notifications + push to each invitee
+    invitees = doc.get("invitees", [])
+    if invitees:
+        event_id = str(doc["_id"])
+        profile = await get_profile_by_id(x_user_id)
+        author_name = profile.get("displayName", "Someone") if profile else "Someone"
+        author_photo = profile.get("profilePhoto", "") if profile else ""
+        title = f"Workout Invite from {author_name}"
+        body_text = f'You\'ve been invited to "{doc["title"]}"'
+        notif_data = {"type": "event_invite", "eventId": event_id, "profilePhoto": author_photo}
+        invitee_uids = [i["uid"] for i in invitees]
+        for uid in invitee_uids:
+            await create_notification(uid, "event_invite", title, body_text, notif_data)
+        # Send push notifications
+        tokens = await get_push_tokens(invitee_uids)
+        if tokens:
+            import httpx
+            messages = [
+                {"to": t, "sound": "default", "title": title, "body": body_text, "data": notif_data}
+                for t in tokens
+            ]
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=messages,
+                    headers={"Content-Type": "application/json"},
+                )
+
     return _to_response(doc)
 
 

@@ -23,10 +23,11 @@ export default function RootLayout() {
   const fgListenerRef = useRef<EventSubscription>();
 
   useEffect(() => {
-    // Refresh badge + notification list when a push arrives in the foreground
+    // Refresh badge + notification list + events when a push arrives in the foreground
     fgListenerRef.current = addNotificationReceivedListener(() => {
       queryClient.invalidateQueries({ queryKey: ['unreadNotifCount'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['eventsInvited'] });
     });
 
     // Handle notification taps → navigate based on type
@@ -42,6 +43,10 @@ export default function RootLayout() {
         });
       } else if (data?.type === 'follow' && data?.followerUsername) {
         router.push(`/user/${data.followerUsername}` as any);
+      } else if (data?.type === 'event_invite' && data?.eventId) {
+        router.push({ pathname: '/event/[id]', params: { id: data.eventId as string } } as any);
+      } else if (data?.type === 'event_rsvp' && data?.eventId) {
+        router.push({ pathname: '/event/[id]', params: { id: data.eventId as string } } as any);
       } else if (data?.type === 'comment' || data?.type === 'reaction') {
         if (data?.postId) {
           setScrollToPostIntent(

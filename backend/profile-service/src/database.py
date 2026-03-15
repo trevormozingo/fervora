@@ -35,6 +35,8 @@ async def connect(mongo_uri: str, db_name: str = "fervora") -> None:
     await _db.comments.create_index("authorUid")
     await _db.events.create_index([("authorUid", 1), ("startTime", 1)])
     await _db.events.create_index("invitees.uid")
+    await _db.events.create_index("expiresAt", expireAfterSeconds=0)
+    await _db.notifications.create_index("expiresAt", expireAfterSeconds=0)
     await _db.profiles.create_index([("location", "2dsphere")])
 
 
@@ -745,6 +747,15 @@ async def create_event(
             invitee_uids = data.get("inviteeUids", []) or []
             invitees = [{"uid": u, "status": "pending"} for u in invitee_uids]
 
+            from datetime import timedelta
+            start_dt = datetime.fromisoformat(data["startTime"].replace("Z", "+00:00"))
+            end_raw = data.get("endTime")
+            if end_raw:
+                expire_base = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+            else:
+                expire_base = start_dt
+            expires_at = expire_base + timedelta(days=30)
+
             doc = {
                 "authorUid": uid,
                 "title": data["title"],
@@ -754,6 +765,7 @@ async def create_event(
                 "endTime": data.get("endTime"),
                 "rrule": data.get("rrule"),
                 "invitees": invitees,
+                "expiresAt": expires_at,
             }
             result = await _events().insert_one(doc, session=session)
             doc["_id"] = result.inserted_id
@@ -770,14 +782,20 @@ async def get_event(event_id: str) -> dict[str, Any] | None:
 
 
 async def get_user_events(uid: str) -> list[dict[str, Any]]:
-    """Get events created by a user, sorted by startTime."""
-    cursor = _events().find({"authorUid": uid}).sort("startTime", 1)
+    """Get upcoming events created by a user, sorted by startTime."""
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = _events().find(
+        {"authorUid": uid, "startTime": {"$gte": now}}
+    ).sort("startTime", 1)
     return [doc async for doc in cursor]
 
 
 async def get_invited_events(uid: str) -> list[dict[str, Any]]:
-    """Get events a user is invited to, sorted by startTime."""
-    cursor = _events().find({"invitees.uid": uid}).sort("startTime", 1)
+    """Get upcoming events a user is invited to, sorted by startTime."""
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = _events().find(
+        {"invitees.uid": uid, "startTime": {"$gte": now}}
+    ).sort("startTime", 1)
     return [doc async for doc in cursor]
 
 
@@ -827,7 +845,8 @@ async def create_notification(
     data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create an in-app notification for a user."""
-    now = datetime.now(timezone.utc).isoformat()
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
     doc = {
         "recipientUid": recipient_uid,
         "type": notif_type,
@@ -835,7 +854,8 @@ async def create_notification(
         "body": body,
         "data": data or {},
         "read": False,
-        "createdAt": now,
+        "createdAt": now.isoformat(),
+        "expiresAt": now + timedelta(days=30),
     }
     result = await _notifications().insert_one(doc)
     doc["_id"] = result.inserted_id
