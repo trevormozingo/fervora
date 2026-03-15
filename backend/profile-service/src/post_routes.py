@@ -10,8 +10,9 @@ Only users with an existing profile can create or delete posts.
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, UploadFile, File
 from typing import List
+from pymongo.errors import DuplicateKeyError
 
-from .database import create_post, delete_post, get_user_posts, get_post_by_id, get_user_tracking, get_user_post_stats
+from .database import create_post, delete_post, get_user_posts, get_post_by_id, get_user_tracking, get_user_post_stats, check_synced_healthkit_ids
 from .schema import validate
 from .storage import upload_post_media, generate_post_id, delete_post_media
 
@@ -93,6 +94,17 @@ async def user_post_stats(uid: str, x_user_id: str = Header(...)):
     return await get_user_post_stats(uid)
 
 
+@router.post("/check-synced")
+async def check_synced(request: Request, x_user_id: str = Header(...)):
+    """Return which HealthKit workout UUIDs are already synced as posts."""
+    body = await request.json()
+    ids = body.get("healthKitIds", [])
+    if not isinstance(ids, list) or len(ids) > 100:
+        raise HTTPException(status_code=422, detail="healthKitIds must be a list of up to 100 strings")
+    synced = await check_synced_healthkit_ids(x_user_id, ids)
+    return {"syncedIds": synced}
+
+
 @router.get("/{post_id}")
 async def get_single_post(post_id: str, x_user_id: str = Header(...)):
     """Return a single post by ID, enriched with reactions and comments."""
@@ -108,7 +120,10 @@ async def create(request: Request, x_user_id: str = Header(...)):
     errors = validate("post_create", body)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    doc = await create_post(x_user_id, body)
+    try:
+        doc = await create_post(x_user_id, body)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Workout already synced")
     if doc is None:
         raise HTTPException(status_code=403, detail="Profile required to create posts")
     return _to_response(doc)

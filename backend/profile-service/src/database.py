@@ -37,6 +37,7 @@ async def connect(mongo_uri: str, db_name: str = "fervora") -> None:
     await _db.events.create_index("invitees.uid")
     await _db.events.create_index("expiresAt", expireAfterSeconds=0)
     await _db.notifications.create_index("expiresAt", expireAfterSeconds=0)
+    await _db.posts.create_index("healthKitId", unique=True, sparse=True)
     await _db.profiles.create_index([("location", "2dsphere")])
 
 
@@ -232,6 +233,7 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
                 "workout": data.get("workout"),
                 "bodyMetrics": data.get("bodyMetrics"),
                 "storagePostId": data.get("storagePostId"),
+                "healthKitId": data.get("healthKitId"),
                 "createdAt": now,
             }
             result = await _posts().insert_one(doc, session=session)
@@ -256,6 +258,17 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
                 await _feed().insert_many(feed_docs, session=session)
 
             return doc
+
+
+async def check_synced_healthkit_ids(uid: str, healthkit_ids: list[str]) -> list[str]:
+    """Return the subset of healthkit_ids that already exist as posts for this user."""
+    if not healthkit_ids:
+        return []
+    cursor = _posts().find(
+        {"authorUid": uid, "healthKitId": {"$in": healthkit_ids}},
+        {"healthKitId": 1},
+    )
+    return [doc["healthKitId"] async for doc in cursor]
 
 
 async def get_user_post_stats(uid: str) -> dict[str, int]:

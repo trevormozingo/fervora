@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { restoreAuth, getIdToken } from '@/services/auth';
 import { registerForPushNotifications } from '@/services/notifications';
 import { startUnreadListener } from '@/services/unread';
@@ -17,6 +18,7 @@ export default function Index() {
       const hasToken = await restoreAuth();
 
       if (!hasToken) {
+        await SplashScreen.hideAsync();
         router.replace('/login');
         return;
       }
@@ -33,8 +35,10 @@ export default function Index() {
             .then((t) => console.log('[index] Push registration result:', t))
             .catch((e) => console.error('[index] Push registration error:', e));
           startUnreadListener();
+          await SplashScreen.hideAsync();
           router.replace('/(home)/feed');
         } else {
+          await SplashScreen.hideAsync();
           // 404 or 401 — go to login or create-profile
           if (res.status === 404) {
             router.replace('/create-profile');
@@ -43,6 +47,7 @@ export default function Index() {
           }
         }
       } catch {
+        await SplashScreen.hideAsync();
         router.replace('/login');
       }
     })();

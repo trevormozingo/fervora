@@ -48,6 +48,8 @@ const WorkoutSchema = z.object({
   avgHeartRate: z.number().min(0).nullable().optional(),
   maxHeartRate: z.number().min(0).nullable().optional(),
   elevationFeet: z.number().min(0).nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
 });
 
 const BodyMetricsSchema = z

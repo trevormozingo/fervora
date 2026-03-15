@@ -102,6 +102,16 @@
           "type": ["number", "null"],
           "minimum": 0,
           "description": "Elevation gain in feet"
+        },
+        "startDate": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the workout started (ISO 8601)"
+        },
+        "endDate": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the workout ended (ISO 8601)"
         }
       },
       "required": ["activityType"],
@@ -136,6 +146,10 @@
       "minProperties": 1,
       "additionalProperties": false,
       "description": "Body metrics update"
+    },
+    "healthKitId": {
+      "type": ["string", "null"],
+      "description": "HealthKit workout UUID for deduplication of auto-synced workouts"
     },
     "createdAt": {
       "type": "string",

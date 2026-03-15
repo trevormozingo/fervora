@@ -1,10 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { addNotificationResponseListener, addNotificationReceivedListener } from '@/services/notifications';
 import { setScrollToPostIntent } from '@/services/scrollToPost';
+import { isAutoSyncEnabled, syncWorkouts } from '@/services/workoutSync';
 import type { EventSubscription } from 'expo-notifications';
+
+SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +68,28 @@ export default function RootLayout() {
       notifListenerRef.current?.remove();
       fgListenerRef.current?.remove();
     };
+  }, []);
+
+  // Auto-sync workouts when app foregrounds
+  useEffect(() => {
+    const runSync = async () => {
+      if (await isAutoSyncEnabled()) {
+        const count = await syncWorkouts();
+        if (count > 0) {
+          queryClient.invalidateQueries({ queryKey: ['posts'] });
+          queryClient.invalidateQueries({ queryKey: ['tracking'] });
+        }
+      }
+    };
+
+    // Run once on mount
+    runSync();
+
+    // Run when app returns from background
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') runSync();
+    });
+    return () => sub.remove();
   }, []);
 
   return (

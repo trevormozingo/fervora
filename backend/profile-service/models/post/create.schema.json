@@ -22,6 +22,9 @@
     "storagePostId": {
       "type": "string",
       "description": "Server-generated storage folder ID returned by POST /posts/media"
+    },
+    "healthKitId": {
+      "$ref": "base.schema.json#/properties/healthKitId"
     }
   },
   "minProperties": 1,

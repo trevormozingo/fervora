@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { GradientScreen, Text, colors, spacing, radii, fonts, fontSizes } from '@/components/ui';
 import { signOut, deleteFirebaseAccount, getIdToken } from '@/services/auth';
 import { stopUnreadListener } from '@/services/unread';
+import { isAutoSyncEnabled, setAutoSyncEnabled, syncWorkouts } from '@/services/workoutSync';
+import { useQueryClient } from '@tanstack/react-query';
+import { isHealthAvailable } from '@/services/health';
 import { config } from '@/config';
 
 type PermissionStatus = 'granted' | 'denied' | 'undetermined' | 'limited';
@@ -31,9 +34,11 @@ function statusColor(s: PermissionStatus) {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [notifStatus, setNotifStatus] = useState<PermissionStatus>('undetermined');
   const [cameraStatus, setCameraStatus] = useState<PermissionStatus>('undetermined');
   const [photosStatus, setPhotosStatus] = useState<PermissionStatus>('undetermined');
+  const [autoSync, setAutoSync] = useState(false);
 
   const checkPermissions = useCallback(async () => {
     const [notif, camera, photos] = await Promise.all([
@@ -49,6 +54,7 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       checkPermissions();
+      isAutoSyncEnabled().then(setAutoSync);
     }, [])
   );
 
@@ -128,6 +134,39 @@ export default function SettingsScreen() {
         <Text style={styles.hint}>
           Permissions are managed by iOS. Tap to open system settings.
         </Text>
+
+        {/* ── Health ────────────────────────────────────── */}
+        {isHealthAvailable() && (
+          <>
+            <Text style={styles.sectionTitle}>Health</Text>
+            <View style={styles.card}>
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name="fitness-outline" size={20} color={colors.foreground} />
+                  <Text style={styles.rowLabel}>Auto-Sync Workouts</Text>
+                </View>
+                <Switch
+                  value={autoSync}
+                  onValueChange={async (val) => {
+                    setAutoSync(val);
+                    await setAutoSyncEnabled(val);
+                    if (val) {
+                      const count = await syncWorkouts();
+                      if (count > 0) {
+                        queryClient.invalidateQueries({ queryKey: ['posts'] });
+                        queryClient.invalidateQueries({ queryKey: ['tracking'] });
+                      }
+                    }
+                  }}
+                  trackColor={{ true: colors.primary }}
+                />
+              </View>
+            </View>
+            <Text style={styles.hint}>
+              Automatically post new Apple Health workouts to your profile.
+            </Text>
+          </>
+        )}
 
         {/* ── Account ───────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Account</Text>

@@ -9,6 +9,8 @@ import { Platform } from 'react-native';
 import type { ActivityType } from '@/models/post';
 
 export interface HealthWorkout {
+  /** HealthKit workout UUID — used for deduplication */
+  healthKitId: string;
   /** Our app's activity type */
   activityType: ActivityType;
   /** Duration in seconds */
@@ -60,6 +62,12 @@ const HK_ACTIVITY_MAP: Record<number, ActivityType> = {
 
 function mapActivityType(hkType: number): ActivityType {
   return HK_ACTIVITY_MAP[hkType] ?? 'other';
+}
+
+/** Return the number if it's finite, otherwise null. */
+function safeNum(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function formatDuration(seconds: number): string {
@@ -170,27 +178,81 @@ export async function fetchRecentWorkouts(
   return samples.map((s) => {
     const start = new Date(s.startDate);
     const end = new Date(s.endDate);
-    const durationSeconds = Math.round(s.duration.quantity);
-    const caloriesBurned = Math.round(s.totalEnergyBurned?.quantity ?? 0);
+    const durationSeconds = Math.round(safeNum(s.duration.quantity) ?? 0);
+    const caloriesBurned = Math.round(safeNum(s.totalEnergyBurned?.quantity) ?? 0);
     const activityType = mapActivityType(s.workoutActivityType);
+    const healthKitId = (s as any).uuid as string;
 
     // Distance: HealthKit provides in meters, convert to miles
-    const distRaw = (s as any).totalDistance?.quantity ?? null;
+    const distRaw = safeNum((s as any).totalDistance?.quantity);
     const distanceMiles = distRaw != null ? Math.round((distRaw / 1609.344) * 100) / 100 : null;
 
     // Elevation gain (metadata, may not be present)
-    const elevRaw = (s as any).totalFlightsClimbed?.quantity ?? (s as any).metadata?.HKElevationAscended ?? null;
-    const elevationFeet = elevRaw != null ? Math.round(Number(elevRaw) * 3.28084) : null;
+    const elevRaw = safeNum((s as any).totalFlightsClimbed?.quantity) ?? safeNum((s as any).metadata?.HKElevationAscended);
+    const elevationFeet = elevRaw != null ? Math.round(elevRaw * 3.28084) : null;
 
     // Heart rate stats from workout events/metadata (may not be present)
-    const avgHeartRate = (s as any).metadata?.HKAverageHeartRate != null
-      ? Math.round(Number((s as any).metadata.HKAverageHeartRate))
-      : null;
-    const maxHeartRate = (s as any).metadata?.HKMaximumHeartRate != null
-      ? Math.round(Number((s as any).metadata.HKMaximumHeartRate))
-      : null;
+    const avgHR = safeNum((s as any).metadata?.HKAverageHeartRate);
+    const avgHeartRate = avgHR != null ? Math.round(avgHR) : null;
+    const maxHR = safeNum((s as any).metadata?.HKMaximumHeartRate);
+    const maxHeartRate = maxHR != null ? Math.round(maxHR) : null;
 
     return {
+      healthKitId,
+      activityType,
+      durationSeconds,
+      caloriesBurned,
+      distanceMiles,
+      avgHeartRate,
+      maxHeartRate,
+      elevationFeet,
+      startDate: start,
+      endDate: end,
+      label: buildLabel(activityType, durationSeconds, caloriesBurned),
+    };
+  });
+}
+
+/**
+ * Fetch workouts from HealthKit since a given date (for auto-sync).
+ * Returns up to 50 workouts, newest first.
+ */
+export async function fetchWorkoutsSince(since: Date): Promise<HealthWorkout[]> {
+  if (!isHealthAvailable()) return [];
+
+  const HealthKit = await import('@kingstinct/react-native-healthkit');
+
+  await HealthKit.requestAuthorization({
+    toRead: ['HKWorkoutTypeIdentifier' as any],
+  });
+
+  const samples = await HealthKit.queryWorkoutSamples({
+    filter: { date: { startDate: since } },
+    limit: 50,
+    ascending: false,
+  });
+
+  return samples.map((s) => {
+    const start = new Date(s.startDate);
+    const end = new Date(s.endDate);
+    const durationSeconds = Math.round(safeNum(s.duration.quantity) ?? 0);
+    const caloriesBurned = Math.round(safeNum(s.totalEnergyBurned?.quantity) ?? 0);
+    const activityType = mapActivityType(s.workoutActivityType);
+    const healthKitId = (s as any).uuid as string;
+
+    const distRaw = safeNum((s as any).totalDistance?.quantity);
+    const distanceMiles = distRaw != null ? Math.round((distRaw / 1609.344) * 100) / 100 : null;
+
+    const elevRaw = safeNum((s as any).totalFlightsClimbed?.quantity) ?? safeNum((s as any).metadata?.HKElevationAscended);
+    const elevationFeet = elevRaw != null ? Math.round(elevRaw * 3.28084) : null;
+
+    const avgHR = safeNum((s as any).metadata?.HKAverageHeartRate);
+    const avgHeartRate = avgHR != null ? Math.round(avgHR) : null;
+    const maxHR = safeNum((s as any).metadata?.HKMaximumHeartRate);
+    const maxHeartRate = maxHR != null ? Math.round(maxHR) : null;
+
+    return {
+      healthKitId,
       activityType,
       durationSeconds,
       caloriesBurned,

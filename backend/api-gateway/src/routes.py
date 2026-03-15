@@ -249,6 +249,13 @@ async def upload_post_media(request: Request):
     return await _proxy_to_service("posts", "/media", request, uid)
 
 
+@router.post("/posts/check-synced")
+async def check_synced(request: Request):
+    """Check which HealthKit workout UUIDs are already synced — requires auth."""
+    uid = _require_auth(request)
+    return await _proxy_to_service("posts", "/check-synced", request, uid)
+
+
 @router.get("/posts/user/{target_uid}")
 async def list_user_posts(target_uid: str, request: Request):
     """List another user's posts — requires auth (for myReaction)."""
