@@ -18,7 +18,7 @@ export default function FeedScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   // ── Initial feed load (cached, stale-while-revalidate) ──
-  const { data: feedData, isLoading, isRefetching } = useQuery({
+  const { data: feedData, isLoading, isRefetching, isError, refetch } = useQuery({
     queryKey: ['feed'],
     queryFn: async () => {
       const data = await apiFetch<FeedPage>('/feed?limit=20');
@@ -131,7 +131,21 @@ export default function FeedScreen() {
         onRefresh={onRefresh}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          !isLoading ? (
+          isError ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="cloud-offline-outline" size={48} color={colors.mutedForeground} />
+              </View>
+              <Text style={styles.emptyTitle}>Can't Connect</Text>
+              <Text muted style={styles.emptySubtitle}>
+                Unable to reach the server. Check your connection and try again.
+              </Text>
+              <Pressable style={styles.emptyButton} onPress={() => refetch()}>
+                <Ionicons name="refresh" size={16} color={colors.primaryForeground} />
+                <Text style={styles.emptyButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : !isLoading ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
                 <Ionicons name="newspaper-outline" size={48} color={colors.mutedForeground} />

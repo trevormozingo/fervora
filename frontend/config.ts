@@ -18,14 +18,18 @@ const useEmulator = (process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATOR ?? 'true') ==
  * On simulator / web, falls back to localhost.
  */
 function getDevHost(): string {
-  // Try multiple sources for the dev server host
-  const host =
-    (Constants as any).debuggerHost ??          // runtime connection to Metro
-    Constants.expoConfig?.hostUri ??            // baked in at build time
-    '';
-  const ip = host.split(':')[0];
+  try {
+    const host =
+      (Constants as any).debuggerHost ??          // runtime connection to Metro
+      Constants.expoConfig?.hostUri ??            // baked in at build time
+      '';
+    const ip = host.split(':')[0];
+    if (ip) return ip;
+  } catch {
+    // debuggerHost may be uninitialized before local network permission is granted
+  }
   // Fallback to your Mac's LAN IP for physical device testing
-  return ip || '192.168.1.16';
+  return '192.168.1.16';
 }
 
 const devHost = getDevHost();

@@ -45,12 +45,12 @@ export default function EventsScreen() {
   const [tab, setTab] = useState<Tab>('invited');
   const uid = getUid();
 
-  const { data: invitedData, isLoading: invitedLoading, isRefetching: invitedRefetching } = useQuery({
+  const { data: invitedData, isLoading: invitedLoading, isRefetching: invitedRefetching, isError: invitedError, refetch: refetchInvited } = useQuery({
     queryKey: ['eventsInvited'],
     queryFn: async () => (await getInvitedEvents()).items,
   });
 
-  const { data: myData, isLoading: myLoading, isRefetching: myRefetching } = useQuery({
+  const { data: myData, isLoading: myLoading, isRefetching: myRefetching, isError: myError, refetch: refetchMy } = useQuery({
     queryKey: ['eventsOwn'],
     queryFn: async () => (await getMyEvents()).items,
   });
@@ -58,6 +58,8 @@ export default function EventsScreen() {
   const events = tab === 'invited' ? (invitedData ?? []) : (myData ?? []);
   const isLoading = tab === 'invited' ? invitedLoading : myLoading;
   const isRefetching = tab === 'invited' ? invitedRefetching : myRefetching;
+  const isError = tab === 'invited' ? invitedError : myError;
+  const refetch = tab === 'invited' ? refetchInvited : refetchMy;
 
   const onRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: tab === 'invited' ? ['eventsInvited'] : ['eventsOwn'] });
@@ -170,6 +172,18 @@ export default function EventsScreen() {
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : isError ? (
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.mutedForeground} />
+          <Text style={styles.errorTitle}>Can't Connect</Text>
+          <Text muted style={styles.errorSubtitle}>
+            Unable to reach the server. Check your connection and try again.
+          </Text>
+          <Pressable style={styles.retryButton} onPress={() => refetch()}>
+            <Ionicons name="refresh" size={16} color={colors.primaryForeground} />
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -361,5 +375,34 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
+  },
+  errorTitle: {
+    fontSize: fontSizes.base,
+    ...fonts.bold,
+    color: colors.foreground,
+    marginTop: spacing.md,
+  },
+  errorSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    lineHeight: 20,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    marginTop: spacing.lg,
+  },
+  retryText: {
+    color: colors.primaryForeground,
+    ...fonts.semibold,
+    fontSize: fontSizes.sm,
   },
 });

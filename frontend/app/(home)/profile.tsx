@@ -29,7 +29,7 @@ export default function ProfileScreen() {
   const [scrollToReactionType, setScrollToReactionType] = useState<string | undefined>(undefined);
 
   // ── Profile + follow counts (cached) ──
-  const { data: profileBundle, isLoading } = useQuery({
+  const { data: profileBundle, isLoading, isError, refetch } = useQuery({
     queryKey: ['myProfile'],
     queryFn: async () => {
       const [profile, followers, following] = await Promise.all([
@@ -144,6 +144,24 @@ export default function ProfileScreen() {
     );
   }
 
+  if (isError) {
+    return (
+      <GradientScreen transparent>
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.mutedForeground} />
+          <Text style={styles.errorTitle}>Can't Connect</Text>
+          <Text muted style={styles.errorSubtitle}>
+            Unable to reach the server. Check your connection and try again.
+          </Text>
+          <Pressable style={styles.retryButton} onPress={() => refetch()}>
+            <Ionicons name="refresh" size={16} color={colors.primaryForeground} />
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      </GradientScreen>
+    );
+  }
+
   return (
     <GradientScreen transparent>
       <View style={styles.headerRow}>
@@ -208,5 +226,34 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.xl,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.foreground,
+    marginTop: spacing.md,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    lineHeight: 20,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    marginTop: spacing.lg,
+  },
+  retryText: {
+    color: colors.primaryForeground,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
