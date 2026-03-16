@@ -315,6 +315,10 @@ export const PublicProfileSchema = z.object({
   location: z.unknown().nullable().default(null).optional(),
   interests: z.array(z.enum(["Weightlifting", "Powerlifting", "Bodybuilding", "Strongman", "Olympic Lifting", "Calisthenics", "CrossFit", "Running", "Cycling", "Swimming", "Rowing", "Jump Rope", "Stair Climbing", "Boxing", "MMA", "Wrestling", "Jiu-Jitsu", "Muay Thai", "Yoga", "Pilates", "Stretching", "Mobility Work", "Hiking", "Rock Climbing", "Trail Running", "Obstacle Course Racing", "Functional Fitness", "Basketball", "Soccer", "Tennis", "Volleyball", "Pickleball", "Flag Football"])).max(20).nullable().optional(),
   fitnessLevel: z.enum(["novice", "intermediate", "experienced", "pro", "olympian"]).nullable().optional(),
+  followersCount: z.number().int().min(0).optional(),
+  followingCount: z.number().int().min(0).optional(),
+  postCount: z.number().int().min(0).optional(),
+  isFollowing: z.boolean().optional(),
 });
 export type PublicProfile = z.infer<typeof PublicProfileSchema>;
 
@@ -329,5 +333,8 @@ export const PrivateProfileSchema = z.object({
   location: z.unknown().nullable().default(null).optional(),
   interests: z.array(z.enum(["Weightlifting", "Powerlifting", "Bodybuilding", "Strongman", "Olympic Lifting", "Calisthenics", "CrossFit", "Running", "Cycling", "Swimming", "Rowing", "Jump Rope", "Stair Climbing", "Boxing", "MMA", "Wrestling", "Jiu-Jitsu", "Muay Thai", "Yoga", "Pilates", "Stretching", "Mobility Work", "Hiking", "Rock Climbing", "Trail Running", "Obstacle Course Racing", "Functional Fitness", "Basketball", "Soccer", "Tennis", "Volleyball", "Pickleball", "Flag Football"])).max(20).nullable().optional(),
   fitnessLevel: z.enum(["novice", "intermediate", "experienced", "pro", "olympian"]).nullable().optional(),
+  followersCount: z.number().int().min(0).optional(),
+  followingCount: z.number().int().min(0).optional(),
+  postCount: z.number().int().min(0).optional(),
 });
 export type PrivateProfile = z.infer<typeof PrivateProfileSchema>;

@@ -16,6 +16,7 @@ import {
   signInWithCredential,
   PhoneAuthProvider,
   onAuthStateChanged,
+  onIdTokenChanged,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { auth } from './firebase';
@@ -47,6 +48,17 @@ export async function restoreAuth(): Promise<boolean> {
     _idToken = await user.getIdToken();
     _uid = user.uid;
   }
+
+  // Keep the cached token fresh when Firebase refreshes it (~1 hour)
+  onIdTokenChanged(auth, async (u) => {
+    if (u) {
+      _idToken = await u.getIdToken();
+      _uid = u.uid;
+    } else {
+      _idToken = null;
+      _uid = null;
+    }
+  });
 
   _restored = true;
   return !!_idToken;

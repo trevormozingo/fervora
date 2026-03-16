@@ -43,24 +43,22 @@ export default function ConversationScreen() {
     const allUids = myUid ? [...otherUids, myUid] : otherUids;
     (async () => {
       const token = getIdToken();
-      const headers: Record<string, string> = token
-        ? { Authorization: `Bearer ${token}` }
-        : {};
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const resolved: Record<string, { name: string; photo?: string }> = {};
-      await Promise.all(
-        allUids.map(async (uid) => {
-          try {
-            const res = await fetch(`${config.apiBaseUrl}/profile/uid/${uid}`, { headers });
-            if (res.ok) {
-              const data = await res.json();
-              resolved[uid] = {
-                name: data.username ?? uid.slice(0, 8),
-                photo: data.profilePhoto,
-              };
-            }
-          } catch {}
-        }),
-      );
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/profile/batch`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ uids: allUids }),
+        });
+        if (res.ok) {
+          const profiles: { id: string; username: string; profilePhoto?: string }[] = await res.json();
+          for (const p of profiles) {
+            resolved[p.id] = { name: p.username ?? p.id.slice(0, 8), photo: p.profilePhoto };
+          }
+        }
+      } catch {}
       setParticipantProfiles(resolved);
       setHeaderLabel(
         otherUids.map((uid) => resolved[uid]?.name ?? uid.slice(0, 8)).join(', '),

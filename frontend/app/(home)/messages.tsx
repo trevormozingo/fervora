@@ -12,27 +12,28 @@ import {
 } from '@/services/messaging';
 import { config } from '@/config';
 
-/** Resolve UIDs → usernames + profile photos via the backend. */
+/** Resolve UIDs → usernames + profile photos via the backend (batch). */
 async function resolveProfiles(
   uids: string[],
 ): Promise<Record<string, { username: string; profilePhoto?: string }>> {
   if (uids.length === 0) return {};
   const token = getIdToken();
-  const headers: Record<string, string> = token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const map: Record<string, { username: string; profilePhoto?: string }> = {};
-  await Promise.all(
-    uids.map(async (uid) => {
-      try {
-        const res = await fetch(`${config.apiBaseUrl}/profile/uid/${uid}`, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          map[uid] = { username: data.username, profilePhoto: data.profilePhoto };
-        }
-      } catch {}
-    }),
-  );
+  try {
+    const res = await fetch(`${config.apiBaseUrl}/profile/batch`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ uids }),
+    });
+    if (res.ok) {
+      const profiles: { id: string; username: string; profilePhoto?: string }[] = await res.json();
+      for (const p of profiles) {
+        map[p.id] = { username: p.username, profilePhoto: p.profilePhoto };
+      }
+    }
+  } catch {}
   return map;
 }
 
@@ -44,6 +45,7 @@ export default function MessagesScreen() {
     Record<string, { username: string; profilePhoto?: string }>
   >({});
   const [loading, setLoading] = useState(true);
+  const fetchedUidsRef = useRef<Set<string>>(new Set());
 
   // Subscribe to conversations
   useEffect(() => {
@@ -52,10 +54,13 @@ export default function MessagesScreen() {
       setConversations(convos);
       setLoading(false);
 
-      // Resolve any new participant UIDs
+      // Resolve only UIDs we haven't fetched yet (ref survives across snapshots)
       const allOtherUids = convos.flatMap((c) => getOtherParticipants(c, myUid));
-      const newUids = [...new Set(allOtherUids)].filter((uid) => uid && !profiles[uid]);
+      const newUids = [...new Set(allOtherUids)].filter(
+        (uid) => uid && !fetchedUidsRef.current.has(uid),
+      );
       if (newUids.length > 0) {
+        newUids.forEach((uid) => fetchedUidsRef.current.add(uid));
         const resolved = await resolveProfiles(newUids);
         setProfiles((prev) => ({ ...prev, ...resolved }));
       }

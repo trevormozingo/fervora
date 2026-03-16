@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,29 +24,14 @@ export default function UserProfileScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
-  // ── Profile data (cached by username) ──
+  // ── Profile data (cached by username) — includes followersCount, followingCount, isFollowing ──
   const { data: profile, isLoading } = useQuery({
     queryKey: ['userProfile', username],
-    queryFn: () => apiFetch<ProfileData>(`/profile/${username}`),
+    queryFn: () => apiFetch<ProfileData & { followersCount: number; followingCount: number; postCount: number; isFollowing?: boolean }>(`/profile/${username}`),
     enabled: !!username,
   });
 
-  // ── Follow counts + follow status (depends on profile.id) ──
-  const { data: followData } = useQuery({
-    queryKey: ['userFollowData', profile?.id],
-    queryFn: async () => {
-      const [followers, following, myFollowing] = await Promise.all([
-        apiFetch<{ count: number }>(`/follows/${profile!.id}/followers`),
-        apiFetch<{ count: number }>(`/follows/${profile!.id}/following`),
-        apiFetch<{ following: { id: string }[] }>('/follows/following'),
-      ]);
-      const amFollowing = myFollowing.following.some((u) => u.id === profile!.id);
-      return { followersCount: followers.count, followingCount: following.count, isFollowing: amFollowing };
-    },
-    enabled: !!profile?.id,
-  });
-
-  const isFollowing = followData?.isFollowing ?? false;
+  const isFollowing = profile?.isFollowing ?? false;
 
   // ── User's posts (cached first page by uid) ──
   const { data: postsData, isLoading: postsLoading, isRefetching: postsRefetching } = useQuery({
@@ -54,13 +39,6 @@ export default function UserProfileScreen() {
     queryFn: () => apiFetch<PostsPage>(`/posts/user/${profile!.id}?limit=20`),
     enabled: !!profile?.id,
     refetchOnMount: 'always',
-  });
-
-  // ── Aggregate post stats (server-side totals) ──
-  const { data: userPostStats } = useQuery({
-    queryKey: ['userPostStats', profile?.id],
-    queryFn: () => apiFetch<{ postCount: number; reactionCount: number; commentCount: number }>(`/posts/user/${profile!.id}/stats`),
-    enabled: !!profile?.id,
   });
 
   // Sync pagination state from cached query data
@@ -98,7 +76,6 @@ export default function UserProfileScreen() {
     useCallback(() => {
       if (!profile?.id) return;
       queryClient.refetchQueries({ queryKey: ['userPosts', profile.id], type: 'active', stale: true });
-      queryClient.refetchQueries({ queryKey: ['userPostStats', profile.id], type: 'active', stale: true });
     }, [queryClient, profile?.id])
   );
 
@@ -107,8 +84,6 @@ export default function UserProfileScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['userPosts', profile.id] }),
       queryClient.invalidateQueries({ queryKey: ['userProfile', username] }),
-      queryClient.invalidateQueries({ queryKey: ['userFollowData', profile.id] }),
-      queryClient.invalidateQueries({ queryKey: ['userPostStats', profile.id] }),
     ]);
   }, [queryClient, profile?.id, username]);
 
@@ -118,17 +93,17 @@ export default function UserProfileScreen() {
     try {
       const method = isFollowing ? 'DELETE' : 'POST';
       await apiFetch(`/follows/${profile.id}`, { method });
-      // Update cached follow data (including isFollowing flag)
-      queryClient.setQueryData<{ followersCount: number; followingCount: number; isFollowing: boolean }>(
-        ['userFollowData', profile.id],
-        (old) => old ? {
+      // Optimistically update the profile cache
+      queryClient.setQueryData(
+        ['userProfile', username],
+        (old: any) => old ? {
           ...old,
-          followersCount: old.followersCount + (isFollowing ? -1 : 1),
+          followersCount: (old.followersCount ?? 0) + (isFollowing ? -1 : 1),
           isFollowing: !isFollowing,
         } : old
       );
     } catch {
-      // ignore
+      Alert.alert('Error', 'Could not update follow status');
     } finally {
       setFollowLoading(false);
     }
@@ -144,11 +119,15 @@ export default function UserProfileScreen() {
   const handleMessage = useCallback(async () => {
     const myUid = getUid();
     if (!myUid || !profile) return;
-    const conversationId = await getOrCreateConversation(myUid, profile.id);
-    router.push({
-      pathname: '/conversation',
-      params: { conversationId, otherUid: profile.id },
-    });
+    try {
+      const conversationId = await getOrCreateConversation(myUid, profile.id);
+      router.push({
+        pathname: '/conversation',
+        params: { conversationId, otherUid: profile.id },
+      });
+    } catch {
+      Alert.alert('Error', 'Could not start conversation');
+    }
   }, [profile, router]);
 
   if (isLoading) {
@@ -176,8 +155,8 @@ export default function UserProfileScreen() {
 
       <ProfileView
         profile={profile ?? null}
-        followersCount={followData?.followersCount ?? 0}
-        followingCount={followData?.followingCount ?? 0}
+        followersCount={profile?.followersCount ?? 0}
+        followingCount={profile?.followingCount ?? 0}
         isOwnProfile={profile?.id === getUid()}
         posts={posts}
         postsLoading={postsLoading || loadingMore}
@@ -188,7 +167,7 @@ export default function UserProfileScreen() {
         followLoading={followLoading}
         onFollowToggle={profile?.id !== getUid() ? handleFollow : undefined}
         onMessage={profile?.id !== getUid() ? handleMessage : undefined}
-        postStats={userPostStats ?? null}
+        postCount={profile?.postCount ?? 0}
         onRefresh={onRefresh}
         isRefreshing={postsRefetching}
       />

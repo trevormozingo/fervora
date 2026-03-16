@@ -88,7 +88,7 @@ export function ProfileForm({
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (showUsername && username.trim().length < 3) errs.username = 'Username must be at least 3 characters';
-    if (showUsername && !/^[a-zA-Z0-9_-]+$/.test(username)) errs.username = 'Letters, numbers, underscores, hyphens only';
+    else if (showUsername && !/^[a-zA-Z0-9_-]+$/.test(username)) errs.username = 'Letters, numbers, underscores, hyphens only';
     if (!displayName.trim()) errs.displayName = 'Display name is required';
     if (requirePhoto && !displayPhoto) errs.photo = 'Profile photo is required';
     if (requireBirthday && !birthday) errs.birthday = 'Birthday is required';

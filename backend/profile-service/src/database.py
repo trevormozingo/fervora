@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, OperationFailure
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 _client: AsyncIOMotorClient | None = None
@@ -70,6 +70,8 @@ async def create_profile(uid: str, data: dict[str, Any]) -> dict[str, Any]:
         "location": data.get("location"),
         "interests": data.get("interests"),
         "fitnessLevel": data.get("fitnessLevel"),
+        "followersCount": 0,
+        "followingCount": 0,
     }
     await _profiles().insert_one(doc)
     return doc
@@ -77,6 +79,11 @@ async def create_profile(uid: str, data: dict[str, Any]) -> dict[str, Any]:
 
 async def get_profile_by_id(uid: str) -> dict[str, Any] | None:
     return await _profiles().find_one({"_id": uid})
+
+
+async def get_profiles_by_ids(uids: list[str]) -> list[dict[str, Any]]:
+    cursor = _profiles().find({"_id": {"$in": uids}})
+    return await cursor.to_list(length=len(uids))
 
 
 async def get_profile_by_username(username: str) -> dict[str, Any] | None:
@@ -154,47 +161,77 @@ async def get_nearby_profiles(
 
 async def delete_profile(uid: str) -> bool:
     """Delete a profile and cascade-delete all related data atomically."""
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            result = await _profiles().delete_one({"_id": uid}, session=session)
-            if result.deleted_count == 0:
-                return False
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    result = await _profiles().delete_one({"_id": uid}, session=session)
+                    if result.deleted_count == 0:
+                        return False
 
-            # Gather this user's post IDs before deleting them
-            post_cursor = _posts().find(
-                {"authorUid": uid}, {"_id": 1}, session=session
-            )
-            post_ids = [doc["_id"] async for doc in post_cursor]
+                    # Gather this user's post IDs before deleting them
+                    post_cursor = _posts().find(
+                        {"authorUid": uid}, {"_id": 1}, session=session
+                    )
+                    post_ids = [doc["_id"] async for doc in post_cursor]
 
-            await _posts().delete_many({"authorUid": uid}, session=session)
-            await _follows().delete_many(
-                {"$or": [{"followerUid": uid}, {"followingUid": uid}]},
-                session=session,
-            )
-            await _feed().delete_many(
-                {"$or": [{"authorUid": uid}, {"ownerUid": uid}]},
-                session=session,
-            )
-            # Remove reactions/comments BY this user (on anyone's posts)
-            await _reactions().delete_many({"authorUid": uid}, session=session)
-            await _comments().delete_many({"authorUid": uid}, session=session)
-            # Remove reactions/comments ON this user's deleted posts
-            if post_ids:
-                await _reactions().delete_many(
-                    {"postId": {"$in": post_ids}}, session=session
-                )
-                await _comments().delete_many(
-                    {"postId": {"$in": post_ids}}, session=session
-                )
-            # Remove events created by this user
-            await _events().delete_many({"authorUid": uid}, session=session)
-            # Remove this user from invitee lists on other events
-            await _events().update_many(
-                {"invitees.uid": uid},
-                {"$pull": {"invitees": {"uid": uid}}},
-                session=session,
-            )
-            return True
+                    await _posts().delete_many({"authorUid": uid}, session=session)
+                    # Decrement followersCount for users this person followed
+                    following_cursor = _follows().find(
+                        {"followerUid": uid}, {"followingUid": 1, "_id": 0},
+                        session=session,
+                    )
+                    following_uids = [d["followingUid"] async for d in following_cursor]
+                    if following_uids:
+                        await _profiles().update_many(
+                            {"_id": {"$in": following_uids}},
+                            {"$inc": {"followersCount": -1}},
+                            session=session,
+                        )
+                    # Decrement followingCount for users who followed this person
+                    follower_cursor = _follows().find(
+                        {"followingUid": uid}, {"followerUid": 1, "_id": 0},
+                        session=session,
+                    )
+                    follower_uids = [d["followerUid"] async for d in follower_cursor]
+                    if follower_uids:
+                        await _profiles().update_many(
+                            {"_id": {"$in": follower_uids}},
+                            {"$inc": {"followingCount": -1}},
+                            session=session,
+                        )
+                    await _follows().delete_many(
+                        {"$or": [{"followerUid": uid}, {"followingUid": uid}]},
+                        session=session,
+                    )
+                    await _feed().delete_many(
+                        {"$or": [{"authorUid": uid}, {"ownerUid": uid}]},
+                        session=session,
+                    )
+                    # Remove reactions/comments BY this user (on anyone's posts)
+                    await _reactions().delete_many({"authorUid": uid}, session=session)
+                    await _comments().delete_many({"authorUid": uid}, session=session)
+                    # Remove reactions/comments ON this user's deleted posts
+                    if post_ids:
+                        await _reactions().delete_many(
+                            {"postId": {"$in": post_ids}}, session=session
+                        )
+                        await _comments().delete_many(
+                            {"postId": {"$in": post_ids}}, session=session
+                        )
+                    # Remove events created by this user
+                    await _events().delete_many({"authorUid": uid}, session=session)
+                    # Remove this user from invitee lists on other events
+                    await _events().update_many(
+                        {"invitees.uid": uid},
+                        {"$pull": {"invitees": {"uid": uid}}},
+                        session=session,
+                    )
+                    return True
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 # ── Posts ─────────────────────────────────────────────────────────────
@@ -215,49 +252,56 @@ async def create_post(uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
     are atomic.  Write-locks the profile to conflict with concurrent
     delete_profile.
     """
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            # Write-lock profile to prevent concurrent deletion
-            profile = await _profiles().find_one_and_update(
-                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
-            )
-            if profile is None:
-                return None
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    # Write-lock profile to prevent concurrent deletion
+                    profile = await _profiles().find_one_and_update(
+                        {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+                    )
+                    if profile is None:
+                        return None
 
-            now = datetime.now(timezone.utc).isoformat()
-            doc = {
-                "authorUid": uid,
-                "title": data.get("title"),
-                "body": data.get("body"),
-                "media": data.get("media"),
-                "workout": data.get("workout"),
-                "bodyMetrics": data.get("bodyMetrics"),
-                "storagePostId": data.get("storagePostId"),
-                "healthKitId": data.get("healthKitId"),
-                "createdAt": now,
-            }
-            result = await _posts().insert_one(doc, session=session)
-            doc["_id"] = result.inserted_id
-            post_id = result.inserted_id
+                    now = datetime.now(timezone.utc).isoformat()
+                    doc = {
+                        "authorUid": uid,
+                        "title": data.get("title"),
+                        "body": data.get("body"),
+                        "media": data.get("media"),
+                        "workout": data.get("workout"),
+                        "bodyMetrics": data.get("bodyMetrics"),
+                        "storagePostId": data.get("storagePostId"),
+                        "createdAt": now,
+                    }
+                    if data.get("healthKitId"):
+                        doc["healthKitId"] = data["healthKitId"]
+                    result = await _posts().insert_one(doc, session=session)
+                    doc["_id"] = result.inserted_id
+                    post_id = result.inserted_id
 
-            # Fan-out: create a feed entry for every follower
-            followers = _follows().find(
-                {"followingUid": uid}, {"followerUid": 1, "_id": 0},
-                session=session,
-            )
-            feed_docs = [
-                {
-                    "ownerUid": f["followerUid"],
-                    "postId": post_id,
-                    "authorUid": uid,
-                    "createdAt": now,
-                }
-                async for f in followers
-            ]
-            if feed_docs:
-                await _feed().insert_many(feed_docs, session=session)
+                    # Fan-out: create a feed entry for every follower
+                    followers = _follows().find(
+                        {"followingUid": uid}, {"followerUid": 1, "_id": 0},
+                        session=session,
+                    )
+                    feed_docs = [
+                        {
+                            "ownerUid": f["followerUid"],
+                            "postId": post_id,
+                            "authorUid": uid,
+                            "createdAt": now,
+                        }
+                        async for f in followers
+                    ]
+                    if feed_docs:
+                        await _feed().insert_many(feed_docs, session=session)
 
-            return doc
+                    return doc
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 async def check_synced_healthkit_ids(uid: str, healthkit_ids: list[str]) -> list[str]:
@@ -271,17 +315,9 @@ async def check_synced_healthkit_ids(uid: str, healthkit_ids: list[str]) -> list
     return [doc["healthKitId"] async for doc in cursor]
 
 
-async def get_user_post_stats(uid: str) -> dict[str, int]:
-    """Return aggregate post/reaction/comment counts for a user."""
-    post_ids = []
-    async for doc in _posts().find({"authorUid": uid}, {"_id": 1}):
-        post_ids.append(doc["_id"])
-    post_count = len(post_ids)
-    if post_count == 0:
-        return {"postCount": 0, "reactionCount": 0, "commentCount": 0}
-    reaction_count = await _reactions().count_documents({"postId": {"$in": post_ids}})
-    comment_count = await _comments().count_documents({"postId": {"$in": post_ids}})
-    return {"postCount": post_count, "reactionCount": reaction_count, "commentCount": comment_count}
+async def count_user_posts(uid: str) -> int:
+    """Count posts by a user. Uses the (authorUid, createdAt) index."""
+    return await _posts().count_documents({"authorUid": uid})
 
 
 async def get_user_posts(
@@ -406,17 +442,23 @@ async def delete_post(post_id: str, uid: str) -> dict | None:
         oid = ObjectId(post_id)
     except Exception:
         return None
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            doc = await _posts().find_one_and_delete(
-                {"_id": oid, "authorUid": uid}, session=session
-            )
-            if doc is None:
-                return None
-            await _feed().delete_many({"postId": oid}, session=session)
-            await _reactions().delete_many({"postId": oid}, session=session)
-            await _comments().delete_many({"postId": oid}, session=session)
-            return doc
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    doc = await _posts().find_one_and_delete(
+                        {"_id": oid, "authorUid": uid}, session=session
+                    )
+                    if doc is None:
+                        return None
+                    await _feed().delete_many({"postId": oid}, session=session)
+                    await _reactions().delete_many({"postId": oid}, session=session)
+                    await _comments().delete_many({"postId": oid}, session=session)
+                    return doc
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 # ── Follows ───────────────────────────────────────────────────────────
@@ -438,66 +480,92 @@ async def follow_user(follower_uid: str, following_uid: str) -> bool | None:
     Uses a transaction so profile checks + insert are atomic.
     Write-locks both profiles to conflict with concurrent delete_profile.
     """
-    async with await _client.start_session() as session:
-        try:
-            async with session.start_transaction():
-                # Write-lock both profiles
-                follower = await _profiles().find_one_and_update(
-                    {"_id": follower_uid}, {"$inc": {"_v": 1}}, session=session
-                )
-                if follower is None:
-                    return None
-                target = await _profiles().find_one_and_update(
-                    {"_id": following_uid}, {"$inc": {"_v": 1}}, session=session
-                )
-                if target is None:
-                    return None
-                await _follows().insert_one(
-                    {"followerUid": follower_uid, "followingUid": following_uid},
-                    session=session,
-                )
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    # Write-lock both profiles + increment counts
+                    follower = await _profiles().find_one_and_update(
+                        {"_id": follower_uid},
+                        {"$inc": {"_v": 1, "followingCount": 1}},
+                        session=session,
+                    )
+                    if follower is None:
+                        return None
+                    target = await _profiles().find_one_and_update(
+                        {"_id": following_uid},
+                        {"$inc": {"_v": 1, "followersCount": 1}},
+                        session=session,
+                    )
+                    if target is None:
+                        return None  # txn aborts, follower $inc is rolled back
+                    await _follows().insert_one(
+                        {"followerUid": follower_uid, "followingUid": following_uid},
+                        session=session,
+                    )
 
-                # Backfill: seed the follower's feed with the last 20 posts
-                recent_posts = _posts().find(
-                    {"authorUid": following_uid},
-                    {"_id": 1, "createdAt": 1},
-                    sort=[("createdAt", -1)],
-                    limit=20,
-                    session=session,
-                )
-                feed_docs = [
-                    {
-                        "ownerUid": follower_uid,
-                        "postId": p["_id"],
-                        "authorUid": following_uid,
-                        "createdAt": p["createdAt"],
-                    }
-                    async for p in recent_posts
-                ]
-                if feed_docs:
-                    await _feed().insert_many(feed_docs, session=session)
+                    # Backfill: seed the follower's feed with the last 20 posts
+                    recent_posts = _posts().find(
+                        {"authorUid": following_uid},
+                        {"_id": 1, "createdAt": 1},
+                        sort=[("createdAt", -1)],
+                        limit=20,
+                        session=session,
+                    )
+                    feed_docs = [
+                        {
+                            "ownerUid": follower_uid,
+                            "postId": p["_id"],
+                            "authorUid": following_uid,
+                            "createdAt": p["createdAt"],
+                        }
+                        async for p in recent_posts
+                    ]
+                    if feed_docs:
+                        await _feed().insert_many(feed_docs, session=session)
 
-                return True
-        except DuplicateKeyError:
-            return False
+                    return True
+            except DuplicateKeyError:
+                return False
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 async def unfollow_user(follower_uid: str, following_uid: str) -> bool:
     """Remove a follow relationship and clean up feed entries atomically. Returns True if deleted."""
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            result = await _follows().delete_one(
-                {"followerUid": follower_uid, "followingUid": following_uid},
-                session=session,
-            )
-            if result.deleted_count == 0:
-                return False
-            # Remove unfollowed user's posts from the follower's feed
-            await _feed().delete_many(
-                {"ownerUid": follower_uid, "authorUid": following_uid},
-                session=session,
-            )
-            return True
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    result = await _follows().delete_one(
+                        {"followerUid": follower_uid, "followingUid": following_uid},
+                        session=session,
+                    )
+                    if result.deleted_count == 0:
+                        return False
+                    # Decrement counts
+                    await _profiles().update_one(
+                        {"_id": follower_uid},
+                        {"$inc": {"followingCount": -1}},
+                        session=session,
+                    )
+                    await _profiles().update_one(
+                        {"_id": following_uid},
+                        {"$inc": {"followersCount": -1}},
+                        session=session,
+                    )
+                    # Remove unfollowed user's posts from the follower's feed
+                    await _feed().delete_many(
+                        {"ownerUid": follower_uid, "authorUid": following_uid},
+                        session=session,
+                    )
+                    return True
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 async def get_following(uid: str) -> list[str]:
@@ -514,6 +582,14 @@ async def get_followers(uid: str) -> list[str]:
         {"followingUid": uid}, {"followerUid": 1, "_id": 0}
     )
     return [doc["followerUid"] async for doc in cursor]
+
+
+async def is_following(follower_uid: str, target_uid: str) -> bool:
+    """Check if follower_uid follows target_uid."""
+    doc = await _follows().find_one(
+        {"followerUid": follower_uid, "followingUid": target_uid}, {"_id": 1}
+    )
+    return doc is not None
 
 
 # ── Feed ──────────────────────────────────────────────────────────────
@@ -595,27 +671,34 @@ async def set_reaction(
     If the user already reacted, update the type.
     Returns None if the post doesn't exist.
     Write-locks the post to conflict with concurrent delete_post.
+    Retries on WriteConflict (up to 3 attempts).
     """
     try:
         oid = ObjectId(post_id)
     except Exception:
         return None
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            # Write-lock post to prevent concurrent deletion
-            post = await _posts().find_one_and_update(
-                {"_id": oid}, {"$inc": {"_v": 1}}, session=session
-            )
-            if post is None:
-                return None
-            doc = await _reactions().find_one_and_update(
-                {"postId": oid, "authorUid": uid},
-                {"$set": {"postId": oid, "authorUid": uid, "type": reaction_type}},
-                upsert=True,
-                return_document=True,
-                session=session,
-            )
-            return doc
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    # Write-lock post to prevent concurrent deletion
+                    post = await _posts().find_one_and_update(
+                        {"_id": oid}, {"$inc": {"_v": 1}}, session=session
+                    )
+                    if post is None:
+                        return None
+                    doc = await _reactions().find_one_and_update(
+                        {"postId": oid, "authorUid": uid},
+                        {"$set": {"postId": oid, "authorUid": uid, "type": reaction_type}},
+                        upsert=True,
+                        return_document=True,
+                        session=session,
+                    )
+                    return doc
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:  # WriteConflict
+                    continue
+                raise
 
 
 async def remove_reaction(post_id: str, uid: str) -> bool:
@@ -656,36 +739,43 @@ async def create_comment(
     Create a comment on a post. Returns None if post doesn't exist.
     Requires the user to have a profile.
     Write-locks profile and post to conflict with concurrent deletions.
+    Retries on WriteConflict (up to 3 attempts).
     """
     try:
         oid = ObjectId(post_id)
     except Exception:
         return None
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            # Write-lock profile and post
-            profile = await _profiles().find_one_and_update(
-                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
-            )
-            if profile is None:
-                return None
-            post = await _posts().find_one_and_update(
-                {"_id": oid}, {"$inc": {"_v": 1}}, session=session
-            )
-            if post is None:
-                return None
-            now = datetime.now(timezone.utc).isoformat()
-            doc = {
-                "postId": oid,
-                "authorUid": uid,
-                "authorUsername": profile.get("username", uid),
-                "authorProfilePhoto": profile.get("profilePhoto"),
-                "body": data["body"],
-                "createdAt": now,
-            }
-            result = await _comments().insert_one(doc, session=session)
-            doc["_id"] = result.inserted_id
-            return doc
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    # Write-lock profile and post
+                    profile = await _profiles().find_one_and_update(
+                        {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+                    )
+                    if profile is None:
+                        return None
+                    post = await _posts().find_one_and_update(
+                        {"_id": oid}, {"$inc": {"_v": 1}}, session=session
+                    )
+                    if post is None:
+                        return None
+                    now = datetime.now(timezone.utc).isoformat()
+                    doc = {
+                        "postId": oid,
+                        "authorUid": uid,
+                        "authorUsername": profile.get("username", uid),
+                        "authorProfilePhoto": profile.get("profilePhoto"),
+                        "body": data["body"],
+                        "createdAt": now,
+                    }
+                    result = await _comments().insert_one(doc, session=session)
+                    doc["_id"] = result.inserted_id
+                    return doc
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:  # WriteConflict
+                    continue
+                raise
 
 
 async def delete_comment(comment_id: str, uid: str) -> bool:
@@ -748,41 +838,47 @@ async def create_event(
     Converts inviteeUids to invitees with status=pending.
     Write-locks the profile to conflict with concurrent delete_profile.
     """
-    async with await _client.start_session() as session:
-        async with session.start_transaction():
-            # Write-lock profile to prevent concurrent deletion
-            profile = await _profiles().find_one_and_update(
-                {"_id": uid}, {"$inc": {"_v": 1}}, session=session
-            )
-            if profile is None:
-                return None
+    for _attempt in range(10):
+        async with await _client.start_session() as session:
+            try:
+                async with session.start_transaction():
+                    # Write-lock profile to prevent concurrent deletion
+                    profile = await _profiles().find_one_and_update(
+                        {"_id": uid}, {"$inc": {"_v": 1}}, session=session
+                    )
+                    if profile is None:
+                        return None
 
-            invitee_uids = data.get("inviteeUids", []) or []
-            invitees = [{"uid": u, "status": "pending"} for u in invitee_uids]
+                    invitee_uids = data.get("inviteeUids", []) or []
+                    invitees = [{"uid": u, "status": "pending"} for u in invitee_uids]
 
-            from datetime import timedelta
-            start_dt = datetime.fromisoformat(data["startTime"].replace("Z", "+00:00"))
-            end_raw = data.get("endTime")
-            if end_raw:
-                expire_base = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
-            else:
-                expire_base = start_dt
-            expires_at = expire_base + timedelta(days=30)
+                    from datetime import timedelta
+                    start_dt = datetime.fromisoformat(data["startTime"].replace("Z", "+00:00"))
+                    end_raw = data.get("endTime")
+                    if end_raw:
+                        expire_base = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+                    else:
+                        expire_base = start_dt
+                    expires_at = expire_base + timedelta(days=30)
 
-            doc = {
-                "authorUid": uid,
-                "title": data["title"],
-                "description": data.get("description"),
-                "location": data.get("location"),
-                "startTime": data["startTime"],
-                "endTime": data.get("endTime"),
-                "rrule": data.get("rrule"),
-                "invitees": invitees,
-                "expiresAt": expires_at,
-            }
-            result = await _events().insert_one(doc, session=session)
-            doc["_id"] = result.inserted_id
-            return doc
+                    doc = {
+                        "authorUid": uid,
+                        "title": data["title"],
+                        "description": data.get("description"),
+                        "location": data.get("location"),
+                        "startTime": data["startTime"],
+                        "endTime": data.get("endTime"),
+                        "rrule": data.get("rrule"),
+                        "invitees": invitees,
+                        "expiresAt": expires_at,
+                    }
+                    result = await _events().insert_one(doc, session=session)
+                    doc["_id"] = result.inserted_id
+                    return doc
+            except OperationFailure as e:
+                if e.code == 112 and _attempt < 9:
+                    continue
+                raise
 
 
 async def get_event(event_id: str) -> dict[str, Any] | None:

@@ -97,6 +97,11 @@ export default function CreateEventScreen() {
       return;
     }
 
+    if (showEndTime && endDate && endDate <= startDate) {
+      Alert.alert('Invalid Time', 'End time must be after start time');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload: Record<string, unknown> = {

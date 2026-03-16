@@ -138,6 +138,7 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 value={code}
                 onChangeText={setCode}
+                maxLength={6}
               />
               <Button
                 label="Verify & Sign In"

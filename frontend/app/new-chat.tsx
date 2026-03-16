@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -33,17 +34,17 @@ export default function NewChatScreen() {
   const [creating, setCreating] = useState(false);
 
   // Debounced search
-  const searchTimer = useState<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = useCallback(
     (text: string) => {
       setSearchText(text);
-      if (searchTimer[0]) clearTimeout(searchTimer[0]);
+      if (searchTimer.current) clearTimeout(searchTimer.current);
       if (!text.trim()) {
         setResults([]);
         return;
       }
-      searchTimer[0] = setTimeout(async () => {
+      searchTimer.current = setTimeout(async () => {
         setSearching(true);
         try {
           const token = getIdToken();
@@ -110,7 +111,7 @@ export default function NewChatScreen() {
         },
       });
     } catch {
-      // ignore
+      Alert.alert('Error', 'Could not start conversation');
     } finally {
       setCreating(false);
     }
@@ -172,6 +173,7 @@ export default function NewChatScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus
+          maxLength={100}
         />
         {searching && <ActivityIndicator size="small" color={colors.mutedForeground} />}
       </View>

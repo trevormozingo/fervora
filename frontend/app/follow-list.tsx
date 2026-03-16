@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,7 +59,7 @@ export default function FollowListScreen() {
         return next;
       });
     } catch {
-      // ignore
+      Alert.alert('Error', 'Could not update follow status');
     } finally {
       setFollowLoadingIds((prev) => {
         const next = new Set(prev);

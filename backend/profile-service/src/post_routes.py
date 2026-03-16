@@ -12,7 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, UploadFile
 from typing import List
 from pymongo.errors import DuplicateKeyError
 
-from .database import create_post, delete_post, get_user_posts, get_post_by_id, get_user_tracking, get_user_post_stats, check_synced_healthkit_ids
+from .database import create_post, delete_post, get_user_posts, get_post_by_id, get_user_tracking, check_synced_healthkit_ids
 from .schema import validate
 from .storage import upload_post_media, generate_post_id, delete_post_media
 
@@ -42,12 +42,6 @@ def _to_response(doc: dict) -> dict:
     if "myReaction" in doc:
         resp["myReaction"] = doc["myReaction"]
     return resp
-
-
-@router.get("/stats")
-async def my_post_stats(x_user_id: str = Header(...)):
-    """Return aggregate post, reaction, and comment counts for the caller."""
-    return await get_user_post_stats(x_user_id)
 
 
 @router.get("")
@@ -86,12 +80,6 @@ async def user_tracking(
 ):
     """Return workout and body-metrics history for a user within a date range."""
     return await get_user_tracking(uid, start=start, end=end)
-
-
-@router.get("/user/{uid}/stats")
-async def user_post_stats(uid: str, x_user_id: str = Header(...)):
-    """Return aggregate post, reaction, and comment counts for a user."""
-    return await get_user_post_stats(uid)
 
 
 @router.post("/check-synced")

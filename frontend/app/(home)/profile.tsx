@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,12 +10,8 @@ import { type Post } from '@/components/PostCard';
 import { consumeScrollToPostIntent } from '@/services/scrollToPost';
 import { apiFetch } from '@/services/api';
 
-type ProfileBundle = {
-  profile: ProfileData;
-  followersCount: number;
-  followingCount: number;
-};
 type PostsPage = { items: Post[]; cursor: string | null; count: number };
+type ProfileWithCounts = ProfileData & { followersCount?: number; followingCount?: number; postCount?: number };
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -28,17 +24,10 @@ export default function ProfileScreen() {
   const [scrollToPostSection, setScrollToPostSection] = useState<'comments' | 'reactions' | null>(null);
   const [scrollToReactionType, setScrollToReactionType] = useState<string | undefined>(undefined);
 
-  // ── Profile + follow counts (cached) ──
-  const { data: profileBundle, isLoading, isError, refetch } = useQuery({
+  // ── Profile (now includes followersCount + followingCount + postCount) ──
+  const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: ['myProfile'],
-    queryFn: async () => {
-      const [profile, followers, following] = await Promise.all([
-        apiFetch<ProfileData>('/profile'),
-        apiFetch<{ count: number }>('/follows/followers'),
-        apiFetch<{ count: number }>('/follows/following'),
-      ]);
-      return { profile, followersCount: followers.count, followingCount: following.count };
-    },
+    queryFn: () => apiFetch<ProfileWithCounts>('/profile'),
   });
 
   // ── Own posts (cached first page) ──
@@ -46,12 +35,6 @@ export default function ProfileScreen() {
     queryKey: ['myPosts'],
     queryFn: () => apiFetch<PostsPage>('/posts?limit=20'),
     refetchOnMount: 'always',
-  });
-
-  // ── Aggregate post stats (server-side totals) ──
-  const { data: postStats } = useQuery({
-    queryKey: ['myPostStats'],
-    queryFn: () => apiFetch<{ postCount: number; reactionCount: number; commentCount: number }>('/posts/stats'),
   });
 
   // Sync pagination state from cached query data
@@ -83,7 +66,6 @@ export default function ProfileScreen() {
       }
       // Only refetch if data is stale (respects staleTime)
       queryClient.refetchQueries({ queryKey: ['myPosts'], type: 'active', stale: true });
-      queryClient.refetchQueries({ queryKey: ['myPostStats'], type: 'active', stale: true });
     }, [queryClient])
   );
 
@@ -107,7 +89,6 @@ export default function ProfileScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['myPosts'] }),
       queryClient.invalidateQueries({ queryKey: ['myProfile'] }),
-      queryClient.invalidateQueries({ queryKey: ['myPostStats'] }),
     ]);
   }, [queryClient]);
 
@@ -125,12 +106,9 @@ export default function ProfileScreen() {
         old ? { ...old, items: old.items.filter((p) => p.id !== postId) } : old
       );
       setExtraPosts((prev) => prev.filter((p) => p.id !== postId));
-      queryClient.invalidateQueries({ queryKey: ['myPostStats'] });
-      if (profileBundle?.profile?.id) {
-        queryClient.invalidateQueries({ queryKey: ['tracking', profileBundle.profile.id] });
-      }
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
     } catch {
-      // ignore
+      Alert.alert('Error', 'Could not delete post');
     }
   };
 
@@ -180,9 +158,9 @@ export default function ProfileScreen() {
       </View>
 
       <ProfileView
-        profile={profileBundle?.profile ?? null}
-        followersCount={profileBundle?.followersCount ?? 0}
-        followingCount={profileBundle?.followingCount ?? 0}
+        profile={profile ?? null}
+        followersCount={profile?.followersCount ?? 0}
+        followingCount={profile?.followingCount ?? 0}
         isOwnProfile
         posts={posts}
         postsLoading={postsLoading || loadingMore}
@@ -192,7 +170,7 @@ export default function ProfileScreen() {
         scrollToPostId={scrollToPostId}
         scrollToPostSection={scrollToPostSection}
         scrollToReactionType={scrollToReactionType}
-        postStats={postStats ?? null}
+        postCount={profile?.postCount ?? 0}
         onRefresh={onRefresh}
         isRefreshing={postsRefetching}
       />

@@ -930,6 +930,7 @@ export function PostCard({ post, showAuthor, onPostChanged, onDeletePost, initia
               onChangeText={setCommentText}
               onSubmitEditing={handleComment}
               returnKeyType="send"
+              maxLength={2000}
             />
             <Pressable onPress={handleComment} disabled={!commentText.trim()}>
               <Ionicons

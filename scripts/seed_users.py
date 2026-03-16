@@ -522,6 +522,26 @@ def main():
         sys.exit(f"ERROR: Could not get token for UID {my_uid}: {e}")
     print("  ✓ Got ID-token for your account")
 
+    # ── Ensure YOUR profile exists ───────────────────────────────────
+    print("\n=== Checking your profile ===")
+    _check = requests.get(f"{gateway}/profile", headers=_hdr(my_token))
+    if _check.status_code == 404:
+        print("  Profile not found – creating one for you …")
+        create_profile(
+            gateway, my_token,
+            username="trevormozingo",
+            display_name="Trevor Mozingo",
+            birthday="1995-01-01",
+            interests=random.sample(INTEREST_OPTIONS, k=4),
+            fitness_level="intermediate",
+        )
+        update_profile_location(gateway, my_token, random_location_near_sf())
+        print("  ✓ Profile created")
+    elif _check.status_code == 200:
+        print("  ✓ Profile already exists")
+    else:
+        print(f"  ⚠ Unexpected status {_check.status_code}: {_check.text[:200]}")
+
     t0 = time.time()
 
     # ── Phase 1: Create fake users ───────────────────────────────────
@@ -551,14 +571,14 @@ def main():
 
     if users:
         # ── Phase 2: YOU follow every fake user ──────────────────────
+        # Sequential to avoid WriteConflict – all follows lock the same profile doc
         print(f"\n=== Phase 2: You follow {len(users)} users ===")
         t1 = time.time()
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(follow_user, gateway, my_token, uid)
-                    for uid, _, _ in users]
-            for f in as_completed(futs):
-                if f.result():
-                    follow_ok += 1
+        for i, (uid, _, _) in enumerate(users):
+            if follow_user(gateway, my_token, uid):
+                follow_ok += 1
+            if (i + 1) % 50 == 0 or (i + 1) == len(users):
+                print(f"  [{i + 1}/{len(users)}]  {follow_ok} follows")
         print(f"  ✓ {follow_ok} follows in {time.time() - t1:.1f}s")
 
         # ── Phase 3: Fake users create posts ─────────────────────────
@@ -589,30 +609,18 @@ def main():
         t3 = time.time()
 
         if other_posts:
-            def _interact(user_tuple):
-                _, token, _ = user_tuple
-                rc, cc = 0, 0
+            for i, (_, token, _) in enumerate(users):
                 for _, _, post in random.sample(
                         other_posts, min(random.randint(3, 10), len(other_posts))):
                     if react_to_post(gateway, token, post["id"]):
-                        rc += 1
+                        rxn_count += 1
                 for _, _, post in random.sample(
                         other_posts, min(random.randint(1, 5), len(other_posts))):
                     if comment_on_post(gateway, token, post["id"]):
-                        cc += 1
-                return rc, cc
-
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                futs = [pool.submit(_interact, u) for u in users]
-                done = 0
-                for f in as_completed(futs):
-                    done += 1
-                    r, c = f.result()
-                    rxn_count += r
-                    cmt_count += c
-                    if done % 50 == 0 or done == len(users):
-                        print(f"  [{done}/{len(users)}]  {rxn_count} reactions, "
-                              f"{cmt_count} comments")
+                        cmt_count += 1
+                if (i + 1) % 50 == 0 or (i + 1) == len(users):
+                    print(f"  [{i + 1}/{len(users)}]  {rxn_count} reactions, "
+                          f"{cmt_count} comments")
 
         print(f"  ✓ {rxn_count} reactions, {cmt_count} comments "
               f"in {time.time() - t3:.1f}s")
@@ -652,31 +660,19 @@ def main():
         print("\n=== Phase 6: Fake users interact with YOUR posts ===")
         t5 = time.time()
 
-        def _interact_mine(user_tuple):
-            _, token, _ = user_tuple
-            rc, cc = 0, 0
+        for i, (_, token, _) in enumerate(users):
             for post in my_posts:
                 # ~70% chance each user reacts to each of your posts
                 if random.random() < 0.7:
                     if react_to_post(gateway, token, post["id"]):
-                        rc += 1
+                        my_rxn += 1
                 # ~30% chance each user comments
                 if random.random() < 0.3:
                     if comment_on_post(gateway, token, post["id"]):
-                        cc += 1
-            return rc, cc
-
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(_interact_mine, u) for u in users]
-            done = 0
-            for f in as_completed(futs):
-                done += 1
-                r, c = f.result()
-                my_rxn += r
-                my_cmt += c
-                if done % 50 == 0 or done == len(users):
-                    print(f"  [{done}/{len(users)}]  {my_rxn} reactions, "
-                          f"{my_cmt} comments on your posts")
+                        my_cmt += 1
+            if (i + 1) % 50 == 0 or (i + 1) == len(users):
+                print(f"  [{i + 1}/{len(users)}]  {my_rxn} reactions, "
+                      f"{my_cmt} comments on your posts")
 
         print(f"  ✓ {my_rxn} reactions, {my_cmt} comments on your posts "
               f"in {time.time() - t5:.1f}s")

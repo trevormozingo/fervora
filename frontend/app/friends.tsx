@@ -72,7 +72,7 @@ export default function FriendsScreen() {
         return next;
       });
     } catch {
-      // ignore
+      Alert.alert('Error', 'Could not update follow status');
     } finally {
       setFollowLoadingIds((prev) => {
         const next = new Set(prev);

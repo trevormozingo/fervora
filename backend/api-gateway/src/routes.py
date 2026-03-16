@@ -177,6 +177,12 @@ async def send_push(request: Request):
     return await _proxy_to_service("profile", "/send-push", request, uid)
 
 
+@router.post("/profile/batch")
+async def batch_profiles(request: Request):
+    """Get multiple profiles by UID — no auth required."""
+    return await _proxy_to_service("profile", "/batch", request)
+
+
 @router.get("/profile/search")
 async def search_profiles(request: Request):
     """Search profiles by username prefix — no auth required."""
@@ -206,14 +212,16 @@ async def mark_notifications_read(request: Request):
 
 @router.get("/profile/uid/{uid}")
 async def get_profile_by_uid(uid: str, request: Request):
-    """Get a public profile by UID — no auth required."""
-    return await _proxy_to_service("profile", f"/uid/{uid}", request)
+    """Get a public profile by UID — auth optional (for isFollowing)."""
+    caller_uid = _optional_auth(request)
+    return await _proxy_to_service("profile", f"/uid/{uid}", request, caller_uid)
 
 
 @router.get("/profile/{username}")
 async def get_public_profile(username: str, request: Request):
-    """Get a public profile by username — no auth required."""
-    return await _proxy_to_service("profile", f"/{username}", request)
+    """Get a public profile by username — auth optional (for isFollowing)."""
+    caller_uid = _optional_auth(request)
+    return await _proxy_to_service("profile", f"/{username}", request, caller_uid)
 
 
 # ─────────────────────────────────────────────────────────────────────

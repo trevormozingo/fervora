@@ -30,6 +30,25 @@
     },
     "fitnessLevel": {
       "$ref": "base.schema.json#/properties/fitnessLevel"
+    },
+    "followersCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of users who follow this profile"
+    },
+    "followingCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of users this profile follows"
+    },
+    "postCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of posts by this user"
+    },
+    "isFollowing": {
+      "type": "boolean",
+      "description": "Whether the authenticated viewer follows this profile (only present when authenticated)"
     }
   },
   "required": ["id", "username", "displayName"],

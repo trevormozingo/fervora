@@ -57,8 +57,8 @@ type Props = {
   scrollToPostSection?: 'comments' | 'reactions' | null;
   /** Which specific reaction type to filter to */
   scrollToReactionType?: string;
-  /** Server-side aggregate stats */
-  postStats?: { postCount: number; reactionCount: number; commentCount: number } | null;
+  /** Denormalized post count from the profile document */
+  postCount?: number;
   /** Called on pull-to-refresh */
   onRefresh?: () => Promise<void>;
   /** Whether a refresh is in progress */
@@ -83,7 +83,7 @@ export function ProfileView({
   scrollToPostId,
   scrollToPostSection,
   scrollToReactionType,
-  postStats,
+  postCount: postCountProp,
   onRefresh,
   isRefreshing = false,
 }: Props) {
@@ -192,13 +192,13 @@ export function ProfileView({
     <Text muted>Could not load profile.</Text>
   );
 
-  // ── Post stats (prefer server-side, fall back to loaded posts) ──
-  const totalPosts = postStats?.postCount ?? posts.length;
-  const totalReactions = postStats?.reactionCount ?? posts.reduce(
+  // ── Post stats (postCount from profile, reaction/comment from loaded posts) ──
+  const totalPosts = postCountProp ?? posts.length;
+  const totalReactions = posts.reduce(
     (sum, p) => sum + Object.values(p.reactionSummary ?? {}).reduce((a, b) => a + b, 0),
     0,
   );
-  const totalComments = postStats?.commentCount ?? posts.reduce((sum, p) => sum + (p.commentCount ?? 0), 0);
+  const totalComments = posts.reduce((sum, p) => sum + (p.commentCount ?? 0), 0);
 
   const renderHeader = () => (
     <View>

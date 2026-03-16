@@ -113,15 +113,6 @@ def generate_post_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
-def delete_file(path: str) -> None:
-    """Delete a single object from Storage. Ignores 'not found' errors."""
-    blob = _get_bucket().blob(path)
-    try:
-        blob.delete()
-    except Exception:
-        pass  # already deleted or never existed
-
-
 def delete_prefix(prefix: str) -> None:
     """
     Delete every object under a given prefix (folder).
