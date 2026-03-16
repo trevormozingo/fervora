@@ -22,6 +22,9 @@ export async function isAutoSyncEnabled(): Promise<boolean> {
 /** Enable or disable auto-sync. */
 export async function setAutoSyncEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY_ENABLED, enabled ? 'true' : 'false');
+  if (!enabled) {
+    await AsyncStorage.removeItem(STORAGE_KEY_LAST_SYNC);
+  }
 }
 
 /**
@@ -44,7 +47,6 @@ export async function syncWorkouts(): Promise<number> {
   const workouts = await fetchWorkoutsSince(since);
   console.log(`[WorkoutSync] Found ${workouts.length} workouts since ${since.toISOString()}`);
   if (workouts.length === 0) {
-    await AsyncStorage.setItem(STORAGE_KEY_LAST_SYNC, new Date().toISOString());
     return 0;
   }
 
@@ -106,6 +108,8 @@ export async function syncWorkouts(): Promise<number> {
     }
   }
 
-  await AsyncStorage.setItem(STORAGE_KEY_LAST_SYNC, new Date().toISOString());
+  if (synced > 0) {
+    await AsyncStorage.setItem(STORAGE_KEY_LAST_SYNC, new Date().toISOString());
+  }
   return synced;
 }

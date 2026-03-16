@@ -153,7 +153,8 @@ export default function SettingsScreen() {
                     if (val) {
                       const count = await syncWorkouts();
                       if (count > 0) {
-                        queryClient.invalidateQueries({ queryKey: ['posts'] });
+                        queryClient.invalidateQueries({ queryKey: ['myPosts'] });
+                        queryClient.invalidateQueries({ queryKey: ['myPostStats'] });
                         queryClient.invalidateQueries({ queryKey: ['tracking'] });
                       }
                     }

@@ -208,36 +208,6 @@ export default function CreateEventScreen() {
                 <Text style={styles.datePickerText}>{formatTime(startDate)}</Text>
               </Pressable>
             </View>
-            {showDatePicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                minimumDate={new Date()}
-                onChange={(_, date) => {
-                  setShowDatePicker(false);
-                  if (date) {
-                    const next = new Date(startDate);
-                    next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                    setStartDate(next);
-                  }
-                }}
-              />
-            )}
-            {showTimePicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="time"
-                minuteInterval={5}
-                onChange={(_, date) => {
-                  setShowTimePicker(false);
-                  if (date) {
-                    const next = new Date(startDate);
-                    next.setHours(date.getHours(), date.getMinutes());
-                    setStartDate(next);
-                  }
-                }}
-              />
-            )}
           </View>
 
           {/* End Time (optional) */}
@@ -269,36 +239,6 @@ export default function CreateEventScreen() {
                   <Text style={styles.datePickerText}>{endDate ? formatTime(endDate) : 'Time'}</Text>
                 </Pressable>
               </View>
-              {showEndDatePicker && endDate && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  minimumDate={startDate}
-                  onChange={(_, date) => {
-                    setShowEndDatePicker(false);
-                    if (date && endDate) {
-                      const next = new Date(endDate);
-                      next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                      setEndDate(next);
-                    }
-                  }}
-                />
-              )}
-              {showEndTimePicker && endDate && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="time"
-                  minuteInterval={5}
-                  onChange={(_, date) => {
-                    setShowEndTimePicker(false);
-                    if (date && endDate) {
-                      const next = new Date(endDate);
-                      next.setHours(date.getHours(), date.getMinutes());
-                      setEndDate(next);
-                    }
-                  }}
-                />
-              )}
             </View>
           )}
 
@@ -390,6 +330,128 @@ export default function CreateEventScreen() {
           </View>
         </Modal>
       </KeyboardAvoidingView>
+
+      {/* Date/Time picker modals */}
+      {showDatePicker && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerSheet}>
+              <View style={styles.pickerHeader}>
+                <Pressable onPress={() => setShowDatePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerCancel}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.pickerHeaderTitle}>Start Date</Text>
+                <Pressable onPress={() => setShowDatePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display="inline"
+                minimumDate={new Date()}
+                onChange={(_, date) => {
+                  if (date) {
+                    const next = new Date(startDate);
+                    next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                    setStartDate(next);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showTimePicker && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerSheet}>
+              <View style={styles.pickerHeader}>
+                <Pressable onPress={() => setShowTimePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerCancel}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.pickerHeaderTitle}>Start Time</Text>
+                <Pressable onPress={() => setShowTimePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={startDate}
+                mode="time"
+                display="spinner"
+                minuteInterval={5}
+                onChange={(_, date) => {
+                  if (date) {
+                    const next = new Date(startDate);
+                    next.setHours(date.getHours(), date.getMinutes());
+                    setStartDate(next);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showEndDatePicker && endDate && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerSheet}>
+              <View style={styles.pickerHeader}>
+                <Pressable onPress={() => setShowEndDatePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerCancel}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.pickerHeaderTitle}>End Date</Text>
+                <Pressable onPress={() => setShowEndDatePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display="inline"
+                minimumDate={startDate}
+                onChange={(_, date) => {
+                  if (date && endDate) {
+                    const next = new Date(endDate);
+                    next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                    setEndDate(next);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showEndTimePicker && endDate && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerSheet}>
+              <View style={styles.pickerHeader}>
+                <Pressable onPress={() => setShowEndTimePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerCancel}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.pickerHeaderTitle}>End Time</Text>
+                <Pressable onPress={() => setShowEndTimePicker(false)} hitSlop={12}>
+                  <Text style={styles.pickerDone}>Done</Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={endDate}
+                mode="time"
+                display="spinner"
+                minuteInterval={5}
+                onChange={(_, date) => {
+                  if (date && endDate) {
+                    const next = new Date(endDate);
+                    next.setHours(date.getHours(), date.getMinutes());
+                    setEndDate(next);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </GradientScreen>
   );
 }
@@ -540,6 +602,43 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     ...fonts.medium,
     color: colors.brandRed,
+  },
+  // Picker modal styles
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  pickerSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingBottom: 34,
+    alignItems: 'center',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  pickerHeaderTitle: {
+    fontSize: fontSizes.base,
+    ...fonts.semibold,
+    color: colors.foreground,
+  },
+  pickerCancel: {
+    fontSize: fontSizes.base,
+    color: colors.mutedForeground,
+  },
+  pickerDone: {
+    fontSize: fontSizes.base,
+    ...fonts.semibold,
+    color: colors.primary,
   },
   // Modal styles
   modalContainer: {
