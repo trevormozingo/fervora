@@ -1,166 +1,114 @@
-"""
-Post routes.
+"""Post routes."""
 
-Response shape matches post/response.schema.json:
-  { id, authorUid, authorUsername, title, body, media, workout, bodyMetrics,
-    createdAt, reactionSummary, recentComments, commentCount, myReaction }
+from fastapi import APIRouter, Header, HTTPException
 
-Only users with an existing profile can create or delete posts.
-"""
-
-from fastapi import APIRouter, Header, HTTPException, Query, Request, UploadFile, File
-from typing import List
-from pymongo.errors import DuplicateKeyError
-
-from .database import create_post, delete_post, get_user_posts, get_post_by_id, get_user_tracking, check_synced_healthkit_ids
-from .schema import validate
-from .storage import upload_post_media, generate_post_id, delete_post_media
+from .database import get_db
+from .post_database import create_post, soft_delete_post
+from .cache import (
+    get_post,
+    get_profile,
+    get_my_reaction,
+    get_post_counts,
+    get_recent_comments,
+    invalidate_post,
+    invalidate_post_comments,
+    invalidate_post_counts,
+    invalidate_post_list,
+    invalidate_profile,
+    list_posts_by_author,
+)
+from .schema import get_fields, validate
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
 
-def _to_response(doc: dict) -> dict:
-    """Shape a DB doc into the response.schema.json response."""
-    resp = {
-        "id": str(doc["_id"]),
-        "authorUid": doc["authorUid"],
-        "authorProfilePhoto": doc.get("authorProfilePhoto"),
-        "title": doc.get("title"),
-        "body": doc.get("body"),
-        "media": doc.get("media"),
-        "workout": doc.get("workout"),
-        "bodyMetrics": doc.get("bodyMetrics"),
-        "createdAt": doc["createdAt"],
-    }
-    # Enrichment fields (present on list queries)
-    if "reactionSummary" in doc:
-        resp["reactionSummary"] = doc["reactionSummary"]
-    if "recentComments" in doc:
-        resp["recentComments"] = doc["recentComments"]
-    if "commentCount" in doc:
-        resp["commentCount"] = doc["commentCount"]
-    if "myReaction" in doc:
-        resp["myReaction"] = doc["myReaction"]
-    return resp
+# ── Response builder ──────────────────────────────────────────────────
+
+# The post response schema uses allOf to merge base + response-specific
+# properties. Combine both sets of field names for the response shape.
+_RESPONSE_FIELDS: set[str] | None = None
 
 
-@router.get("")
-async def list_my_posts(
-    x_user_id: str = Header(...),
-    limit: int = Query(default=20, ge=1, le=100),
-    cursor: str | None = Query(default=None),
-):
-    """Return the caller's own posts, newest first."""
-    docs = await get_user_posts(x_user_id, limit=limit, cursor=cursor)
-    items = [_to_response(d) for d in docs]
-    next_cursor = items[-1]["createdAt"] if items else None
-    return {"items": items, "count": len(items), "cursor": next_cursor}
+def _get_response_fields() -> set[str]:
+    global _RESPONSE_FIELDS
+    if _RESPONSE_FIELDS is None:
+        _RESPONSE_FIELDS = set(get_fields("post_base")) | set(get_fields("post_response"))
+    return _RESPONSE_FIELDS
 
 
-@router.get("/user/{uid}")
-async def list_user_posts(
-    uid: str,
-    x_user_id: str = Header(...),
-    limit: int = Query(default=20, ge=1, le=100),
-    cursor: str | None = Query(default=None),
-):
-    """Return a user's posts (public). Viewer UID used for myReaction."""
-    docs = await get_user_posts(uid, limit=limit, cursor=cursor, viewer_uid=x_user_id)
-    items = [_to_response(d) for d in docs]
-    next_cursor = items[-1]["createdAt"] if items else None
-    return {"items": items, "count": len(items), "cursor": next_cursor}
+async def _to_response(doc: dict, viewer_uid: str | None = None) -> dict:
+    """Build a response dict from a DB document."""
+    fields = _get_response_fields()
+    db = get_db()
+
+    # Resolve author info via cache
+    author_profile = await get_profile(doc["authorUid"], db)
+    author_username = author_profile["username"] if author_profile else None
+    author_photo = author_profile.get("profilePhoto") if author_profile else None
+
+    # Cached aggregations
+    post_id = doc["_id"]
+    counts = await get_post_counts(post_id, db)
+    recent = await get_recent_comments(post_id, db)
+    my_reaction = await get_my_reaction(post_id, viewer_uid, db) if viewer_uid else None
+
+    out: dict = {}
+    for field in fields:
+        if field == "id":
+            out["id"] = post_id
+        elif field == "authorUsername":
+            out["authorUsername"] = author_username
+        elif field == "authorProfilePhoto":
+            out["authorProfilePhoto"] = author_photo
+        elif field == "reactionSummary":
+            out["reactionSummary"] = counts.get("reactionSummary", {})
+        elif field == "commentCount":
+            out["commentCount"] = counts.get("commentCount", 0)
+        elif field == "recentComments":
+            out["recentComments"] = recent
+        elif field == "myReaction":
+            out["myReaction"] = my_reaction
+        else:
+            out[field] = doc.get(field)
+    return out
 
 
-@router.get("/user/{uid}/tracking")
-async def user_tracking(
-    uid: str,
-    x_user_id: str = Header(...),
-    start: str | None = None,
-    end: str | None = None,
-):
-    """Return workout and body-metrics history for a user within a date range."""
-    return await get_user_tracking(uid, start=start, end=end)
+# ── Endpoints ─────────────────────────────────────────────────────────
 
+@router.post("", status_code=201)
+async def create(request_body: dict, x_user_id: str = Header(...)):
+    errors = validate("post_create", request_body)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
 
-@router.post("/check-synced")
-async def check_synced(request: Request, x_user_id: str = Header(...)):
-    """Return which HealthKit workout UUIDs are already synced as posts."""
-    body = await request.json()
-    ids = body.get("healthKitIds", [])
-    if not isinstance(ids, list) or len(ids) > 100:
-        raise HTTPException(status_code=422, detail="healthKitIds must be a list of up to 100 strings")
-    synced = await check_synced_healthkit_ids(x_user_id, ids)
-    return {"syncedIds": synced}
+    doc = await create_post(x_user_id, request_body)
+    # Invalidate profile counts (postCount changed) and post list for this author
+    await invalidate_profile(x_user_id)
+    await invalidate_post_list(x_user_id)
+    return await _to_response(doc, viewer_uid=x_user_id)
 
 
 @router.get("/{post_id}")
-async def get_single_post(post_id: str, x_user_id: str = Header(...)):
-    """Return a single post by ID, enriched with reactions and comments."""
-    doc = await get_post_by_id(post_id, viewer_uid=x_user_id)
+async def get_by_id(post_id: str, x_user_id: str = Header(...)):
+    doc = await get_post(post_id, get_db())
     if not doc:
         raise HTTPException(status_code=404, detail="Post not found")
-    return _to_response(doc)
+    return await _to_response(doc, viewer_uid=x_user_id)
 
 
-@router.post("", status_code=201)
-async def create(request: Request, x_user_id: str = Header(...)):
-    body = await request.json()
-    errors = validate("post_create", body)
-    if errors:
-        raise HTTPException(status_code=422, detail=errors)
-    try:
-        doc = await create_post(x_user_id, body)
-    except DuplicateKeyError:
-        raise HTTPException(status_code=409, detail="Workout already synced")
-    if doc is None:
-        raise HTTPException(status_code=403, detail="Profile required to create posts")
-    return _to_response(doc)
+@router.get("")
+async def list_by_author(author: str, x_user_id: str = Header(...)):
+    """List posts by a specific author. Query param: ?author=<uid>"""
+    docs = await list_posts_by_author(author, get_db())
+    return [await _to_response(d, viewer_uid=x_user_id) for d in docs]
 
 
 @router.delete("/{post_id}", status_code=204)
 async def delete(post_id: str, x_user_id: str = Header(...)):
-    doc = await delete_post(post_id, x_user_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Post not found or not owned by you")
-    # Clean up media files from Storage
-    storage_post_id = doc.get("storagePostId")
-    if storage_post_id:
-        try:
-            delete_post_media(x_user_id, storage_post_id)
-        except Exception:
-            pass  # best-effort
-
-
-@router.post("/media", status_code=201)
-async def upload_media(
-    files: List[UploadFile] = File(...),
-    x_user_id: str = Header(...),
-):
-    """
-    Upload post media files before creating the post.
-
-    Returns { postId, media: [{ url, mimeType }, ...] }.
-    The postId should be included as storagePostId when creating the post
-    so the backend can clean up storage on post deletion.
-    """
-    if len(files) > 10:
-        raise HTTPException(status_code=422, detail="Maximum 10 files allowed")
-
-    post_id = generate_post_id()
-    results = []
-
-    for index, file in enumerate(files):
-        data = await file.read()
-        if len(data) > 20 * 1024 * 1024:  # 20 MB per file
-            raise HTTPException(
-                status_code=422,
-                detail=f"File {file.filename} too large (max 20 MB)",
-            )
-
-        content_type = file.content_type or "application/octet-stream"
-        item = upload_post_media(
-            x_user_id, post_id, index, data, content_type, file.filename or f"media_{index}"
-        )
-        results.append(item)
-
-    return {"postId": post_id, "media": results}
+    deleted = await soft_delete_post(post_id, x_user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Post not found")
+    await invalidate_post(post_id)
+    await invalidate_post_list(x_user_id)
+    await invalidate_post_counts(post_id)
+    await invalidate_post_comments(post_id)

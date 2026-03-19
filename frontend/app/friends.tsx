@@ -8,6 +8,7 @@ import { GradientScreen, Text, colors, fonts, fontSizes, spacing, radii } from '
 import { LocationPicker } from '@/components/LocationPicker';
 import { getUid } from '@/services/auth';
 import { apiFetch } from '@/services/api';
+import { RangeSlider } from '@/components/RangeSlider';
 
 type NearbyUser = {
   id: string;
@@ -47,6 +48,9 @@ export default function FriendsScreen() {
   const [mapPickerVisible, setMapPickerVisible] = useState(false);
   const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
   const [followLoadingIds, setFollowLoadingIds] = useState<Set<string>>(new Set());
+  const [minAge, setMinAge] = useState(18);
+  const [maxAge, setMaxAge] = useState(99);
+  const ageInitialized = useRef(false);
 
   /** Fetch the set of user IDs the current user follows */
   const loadFollowing = useCallback(async () => {
@@ -85,7 +89,16 @@ export default function FriendsScreen() {
   /** Fetch the user's profile to get their saved location */
   const loadProfileLocation = useCallback(async (): Promise<{ coordinates: [number, number]; label?: string | null } | null> => {
     try {
-      const profile = await apiFetch<{ location?: { coordinates?: [number, number]; label?: string | null } }>('/profile');
+      const profile = await apiFetch<{ birthday?: string | null; location?: { coordinates?: [number, number]; label?: string | null } }>('/profile');
+      // Center age slider on user's age
+      if (!ageInitialized.current && profile.birthday) {
+        const dob = new Date(profile.birthday);
+        const today = new Date();
+        const userAge = today.getFullYear() - dob.getFullYear() - (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
+        setMinAge(Math.max(18, userAge - 2));
+        setMaxAge(Math.min(99, userAge + 2));
+        ageInitialized.current = true;
+      }
       if (profile.location?.coordinates) {
         setProfileLocation(profile.location as any);
         return profile.location as any;
@@ -103,14 +116,17 @@ export default function FriendsScreen() {
     setNeedsLocation(false);
     try {
       const radiusKm = Math.round(radiusMiles * 1.60934);
-      const data = await apiFetch<{ items: NearbyUser[] }>(`/profile/nearby?lng=${lng}&lat=${lat}&radius=${radiusKm}`);
+      let url = `/profile/nearby?lng=${lng}&lat=${lat}&radius=${radiusKm}`;
+      if (minAge > 18) url += `&min_age=${minAge}`;
+      if (maxAge < 99) url += `&max_age=${maxAge}`;
+      const data = await apiFetch<{ items: NearbyUser[] }>(url);
       setUsers(data.items ?? []);
     } catch (err: any) {
       setError(err.message ?? 'Something went wrong');
     } finally {
       setLoading(false);
     }
-  }, [radiusMiles]);
+  }, [radiusMiles, minAge, maxAge]);
 
   /** Main load: check profile location first, then fetch */
   const fetchNearby = useCallback(async () => {
@@ -263,6 +279,41 @@ export default function FriendsScreen() {
           <View style={styles.sliderTicks}>
             <Text muted style={styles.tickText}>1 mi</Text>
             <Text muted style={styles.tickText}>200 mi</Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── Age filter ── */}
+      {!needsLocation && (
+        <View style={styles.radiusCard}>
+          <View style={styles.radiusHeader}>
+            <Ionicons name="people-outline" size={16} color={colors.foreground} />
+            <Text style={styles.radiusLabel}>Age Range</Text>
+            <View style={styles.radiusValueBadge}>
+              <Text style={styles.radiusValue}>{minAge} – {maxAge}</Text>
+            </View>
+          </View>
+          <RangeSlider
+            min={18}
+            max={99}
+            step={1}
+            low={minAge}
+            high={maxAge}
+            onValuesChange={(lo, hi) => { setMinAge(lo); setMaxAge(hi); }}
+            onSlidingComplete={() => {
+              if (profileLocation?.coordinates) {
+                fetchNearbyWithCoords(profileLocation.coordinates[0], profileLocation.coordinates[1]);
+              }
+            }}
+            minGap={4}
+            activeTrackColor={colors.primary}
+            thumbColor={colors.primary}
+            trackColor={colors.border}
+            style={styles.ageRangeSlider}
+          />
+          <View style={styles.sliderTicks}>
+            <Text muted style={styles.tickText}>18</Text>
+            <Text muted style={styles.tickText}>99</Text>
           </View>
         </View>
       )}
@@ -597,5 +648,10 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     ...fonts.semibold,
     fontSize: fontSizes.sm,
+  },
+
+  // ── Age filter ──
+  ageRangeSlider: {
+    marginTop: spacing.xs,
   },
 });

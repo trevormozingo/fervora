@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { GradientScreen, colors, spacing } from '@/components/ui';
+import { GradientScreen, Text, colors, spacing } from '@/components/ui';
 import { ProfileView, type ProfileData } from '@/components/ProfileView';
 import { type Post } from '@/components/PostCard';
 import { getUid } from '@/services/auth';
@@ -23,15 +23,20 @@ export default function UserProfileScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // ── Profile data (cached by username) — includes followersCount, followingCount, isFollowing ──
   const { data: profile, isLoading } = useQuery({
     queryKey: ['userProfile', username],
-    queryFn: () => apiFetch<ProfileData & { followersCount: number; followingCount: number; postCount: number; isFollowing?: boolean }>(`/profile/${username}`),
+    queryFn: () => apiFetch<ProfileData & { followersCount: number; followingCount: number; postCount: number; isFollowing?: boolean; isBlocked?: boolean; isBlockedByThem?: boolean }>(`/profile/${username}`),
     enabled: !!username,
   });
 
   const isFollowing = profile?.isFollowing ?? false;
+  const isBlocked = profile?.isBlocked ?? false;
+  const isBlockedByThem = profile?.isBlockedByThem ?? false;
+  const anyBlock = isBlocked || isBlockedByThem;
 
   // ── User's posts (cached first page by uid) ──
   const { data: postsData, isLoading: postsLoading, isRefetching: postsRefetching } = useQuery({
@@ -130,6 +135,31 @@ export default function UserProfileScreen() {
     }
   }, [profile, router]);
 
+  const handleBlock = async () => {
+    if (!profile || blockLoading) return;
+    setBlockLoading(true);
+    try {
+      const method = isBlocked ? 'DELETE' : 'POST';
+      await apiFetch(`/blocks/${profile.id}`, { method });
+      queryClient.setQueryData(
+        ['userProfile', username],
+        (old: any) => old ? {
+          ...old,
+          isBlocked: !isBlocked,
+          // If blocking, also unfollow
+          ...(!isBlocked ? { isFollowing: false } : {}),
+        } : old
+      );
+      // Invalidate feeds/search that may now be stale
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['nearbyProfiles'] });
+    } catch {
+      Alert.alert('Error', 'Could not update block status');
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <GradientScreen>
@@ -151,6 +181,47 @@ export default function UserProfileScreen() {
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.foreground} />
         </Pressable>
+        {profile?.id !== getUid() && (
+          <View style={{ position: 'relative' }}>
+            <Pressable onPress={() => setMenuOpen((o) => !o)} style={styles.menuButton}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.foreground} />
+            </Pressable>
+            {menuOpen && (
+              <View style={styles.dropdown}>
+                <Pressable
+                  style={styles.dropdownItem}
+                  disabled={blockLoading}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    Alert.alert(
+                      isBlocked ? 'Unblock User' : 'Block User',
+                      isBlocked
+                        ? `Unblock @${profile?.username}?`
+                        : `Block @${profile?.username}? They won't be able to see your profile, posts, or message you.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: isBlocked ? 'Unblock' : 'Block',
+                          style: isBlocked ? 'default' : 'destructive',
+                          onPress: handleBlock,
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Ionicons
+                    name="ban-outline"
+                    size={16}
+                    color={isBlocked ? '#ef4444' : colors.foreground}
+                  />
+                  <Text style={[styles.dropdownText, isBlocked && { color: '#ef4444' }]}>
+                    {isBlocked ? 'Unblock' : 'Block'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <ProfileView
@@ -158,16 +229,16 @@ export default function UserProfileScreen() {
         followersCount={profile?.followersCount ?? 0}
         followingCount={profile?.followingCount ?? 0}
         isOwnProfile={profile?.id === getUid()}
-        posts={posts}
-        postsLoading={postsLoading || loadingMore}
+        posts={anyBlock ? [] : posts}
+        postsLoading={anyBlock ? false : (postsLoading || loadingMore)}
         onLoadMore={loadMore}
         onPostChanged={handlePostChanged}
         followListParams={profile ? `&uid=${profile.id}` : ''}
         isFollowing={isFollowing}
         followLoading={followLoading}
-        onFollowToggle={profile?.id !== getUid() ? handleFollow : undefined}
-        onMessage={profile?.id !== getUid() ? handleMessage : undefined}
-        postCount={profile?.postCount ?? 0}
+        onFollowToggle={profile?.id !== getUid() && !anyBlock ? handleFollow : undefined}
+        onMessage={profile?.id !== getUid() && !anyBlock ? handleMessage : undefined}
+        postCount={anyBlock ? 0 : (profile?.postCount ?? 0)}
         onRefresh={onRefresh}
         isRefreshing={postsRefetching}
       />
@@ -179,11 +250,43 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   backButton: {
     padding: spacing.xs,
+  },
+  menuButton: {
+    padding: spacing.xs,
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 4,
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 100,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  dropdownText: {
+    fontSize: 15,
+    color: colors.foreground,
   },
   center: {
     flex: 1,

@@ -1,173 +1,127 @@
-"""
-Event routes.
+"""Event routes — CRUD + RSVP."""
 
-CRUD for events with iCalendar (.ics) export.
-Events support invitees with RSVP (pending/accepted/declined).
-Recurrence via iCal RRULE strings.
-"""
+from fastapi import APIRouter, Header, HTTPException
 
-from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import Response
-from icalendar import Calendar, Event as ICalEvent
-from datetime import datetime
-
-from .database import (
+from .database import get_db
+from .event_database import (
     create_event,
-    create_notification,
-    delete_event,
-    get_event,
-    get_invited_events,
-    get_profile_by_id,
-    get_push_tokens,
-    get_user_events,
     rsvp_event,
+    soft_delete_event,
+    update_event,
 )
-from .schema import validate
+from .cache import (
+    get_event,
+    get_profile,
+    invalidate_event,
+    invalidate_event_list,
+    list_events_by_author,
+)
+from .schema import get_fields, validate
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 
-def _to_response(doc: dict) -> dict:
-    """Shape a DB doc into the response.schema.json response."""
-    return {
-        "id": str(doc["_id"]),
-        "authorUid": doc["authorUid"],
-        "title": doc["title"],
-        "description": doc.get("description"),
-        "location": doc.get("location"),
-        "startTime": doc["startTime"],
-        "endTime": doc.get("endTime"),
-        "rrule": doc.get("rrule"),
-        "invitees": doc.get("invitees", []),
-    }
+# ── Response builder ──────────────────────────────────────────────────
 
+_RESPONSE_FIELDS: set[str] | None = None
+
+
+def _get_response_fields() -> set[str]:
+    global _RESPONSE_FIELDS
+    if _RESPONSE_FIELDS is None:
+        _RESPONSE_FIELDS = set(get_fields("event_base"))
+    return _RESPONSE_FIELDS
+
+
+async def _to_response(doc: dict) -> dict:
+    """Build a response dict from a DB document."""
+    fields = _get_response_fields()
+
+    author_profile = await get_profile(doc["authorUid"], get_db())
+    author_username = author_profile["username"] if author_profile else None
+
+    out: dict = {}
+    for field in fields:
+        if field == "id":
+            out["id"] = doc["_id"]
+        else:
+            out[field] = doc.get(field)
+    out["authorUsername"] = author_username
+    return out
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.post("", status_code=201)
-async def create(request: Request, x_user_id: str = Header(...)):
-    body = await request.json()
-    errors = validate("event_create", body)
+async def create(request_body: dict, x_user_id: str = Header(...)):
+    errors = validate("event_create", request_body)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    doc = await create_event(x_user_id, body)
-    if doc is None:
-        raise HTTPException(status_code=403, detail="Profile required to create events")
 
-    # Send in-app notifications + push to each invitee
-    invitees = doc.get("invitees", [])
-    if invitees:
-        event_id = str(doc["_id"])
-        profile = await get_profile_by_id(x_user_id)
-        author_name = profile.get("displayName", "Someone") if profile else "Someone"
-        author_photo = profile.get("profilePhoto", "") if profile else ""
-        title = f"Workout Invite from {author_name}"
-        body_text = f'You\'ve been invited to "{doc["title"]}"'
-        notif_data = {"type": "event_invite", "eventId": event_id, "profilePhoto": author_photo}
-        invitee_uids = [i["uid"] for i in invitees]
-        for uid in invitee_uids:
-            await create_notification(uid, "event_invite", title, body_text, notif_data)
-        # Send push notifications
-        tokens = await get_push_tokens(invitee_uids)
-        if tokens:
-            import httpx
-            messages = [
-                {"to": t, "sound": "default", "title": title, "body": body_text, "data": notif_data}
-                for t in tokens
-            ]
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    "https://exp.host/--/api/v2/push/send",
-                    json=messages,
-                    headers={"Content-Type": "application/json"},
-                )
-
-    return _to_response(doc)
-
-
-@router.get("", summary="List events created by the caller")
-async def list_own(x_user_id: str = Header(...)):
-    events = await get_user_events(x_user_id)
-    items = [_to_response(e) for e in events]
-    return {"items": items, "count": len(items)}
-
-
-@router.get("/invited", summary="List events the caller is invited to")
-async def list_invited(x_user_id: str = Header(...)):
-    events = await get_invited_events(x_user_id)
-    items = [_to_response(e) for e in events]
-    return {"items": items, "count": len(items)}
+    doc = await create_event(x_user_id, request_body)
+    await invalidate_event_list(x_user_id)
+    return await _to_response(doc)
 
 
 @router.get("/{event_id}")
-async def get(event_id: str):
-    doc = await get_event(event_id)
-    if doc is None:
+async def get_by_id(event_id: str, x_user_id: str = Header(...)):
+    doc = await get_event(event_id, get_db())
+    if not doc:
         raise HTTPException(status_code=404, detail="Event not found")
-    return _to_response(doc)
+    return await _to_response(doc)
+
+
+@router.get("")
+async def list_by_author(author: str, x_user_id: str = Header(...)):
+    """List events by a specific author. Query param: ?author=<uid>"""
+    docs = await list_events_by_author(author, get_db())
+    return [await _to_response(d) for d in docs]
+
+
+@router.patch("/{event_id}")
+async def update(event_id: str, request_body: dict, x_user_id: str = Header(...)):
+    errors = validate("event_create", request_body)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+
+    doc = await update_event(event_id, x_user_id, request_body)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await invalidate_event(event_id)
+    await invalidate_event_list(x_user_id)
+    return await _to_response(doc)
+
+
+@router.post("/{event_id}/rsvp", status_code=200)
+async def rsvp(event_id: str, request_body: dict, x_user_id: str = Header(...)):
+    errors = validate("event_rsvp", request_body)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+
+    doc = await get_event(event_id, get_db())
+    if not doc:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Verify user is an invitee
+    invitee_uids = [i["uid"] for i in (doc.get("invitees") or [])]
+    if x_user_id not in invitee_uids:
+        raise HTTPException(status_code=403, detail="Not invited to this event")
+
+    updated = await rsvp_event(event_id, x_user_id, request_body["status"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await invalidate_event(event_id)
+
+    refreshed = await get_event(event_id, get_db())
+    return await _to_response(refreshed)
 
 
 @router.delete("/{event_id}", status_code=204)
 async def delete(event_id: str, x_user_id: str = Header(...)):
-    deleted = await delete_event(event_id, x_user_id)
+    deleted = await soft_delete_event(event_id, x_user_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Event not found or not owned by you")
-
-
-@router.put("/{event_id}/rsvp")
-async def rsvp(event_id: str, request: Request, x_user_id: str = Header(...)):
-    body = await request.json()
-    errors = validate("event_rsvp", body)
-    if errors:
-        raise HTTPException(status_code=422, detail=errors)
-    doc = await rsvp_event(event_id, x_user_id, body["status"])
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Event not found or you are not invited")
-    return _to_response(doc)
-
-
-@router.get("/{event_id}/ical", summary="Export event as .ics file")
-async def export_ical(event_id: str):
-    doc = await get_event(event_id)
-    if doc is None:
         raise HTTPException(status_code=404, detail="Event not found")
-
-    cal = Calendar()
-    cal.add("prodid", "-//Fervora//Events//EN")
-    cal.add("version", "2.0")
-
-    event = ICalEvent()
-    event.add("uid", str(doc["_id"]) + "@fervora")
-    event.add("summary", doc["title"])
-    event.add("dtstart", datetime.fromisoformat(doc["startTime"]))
-
-    if doc.get("endTime"):
-        event.add("dtend", datetime.fromisoformat(doc["endTime"]))
-    if doc.get("description"):
-        event.add("description", doc["description"])
-    if doc.get("location"):
-        event.add("location", doc["location"])
-    if doc.get("rrule"):
-        # Parse RRULE string into components for icalendar lib
-        event.add("rrule", _parse_rrule(doc["rrule"]))
-
-    cal.add_component(event)
-
-    return Response(
-        content=cal.to_ical(),
-        media_type="text/calendar",
-        headers={"Content-Disposition": f'attachment; filename="event-{event_id}.ics"'},
-    )
-
-
-def _parse_rrule(rrule_str: str) -> dict:
-    """Parse an RRULE string like FREQ=WEEKLY;BYDAY=MO into a dict for icalendar."""
-    parts = rrule_str.split(";")
-    result = {}
-    for part in parts:
-        key, value = part.split("=", 1)
-        key = key.strip().upper()
-        value = value.strip()
-        if "," in value:
-            result[key] = value.split(",")
-        else:
-            result[key] = value
-    return result
+    await invalidate_event(event_id)
+    await invalidate_event_list(x_user_id)

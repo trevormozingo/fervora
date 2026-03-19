@@ -1,30 +1,29 @@
-"""
-API Gateway — main entrypoint.
+"""API Gateway — reverse proxy to backend services."""
 
-Starts the FastAPI application with:
-  - Auth middleware (Firebase or mock)
-  - Reverse proxy routes to backend services
-"""
-
+import os
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
-from .proxy import close_client
-from .routes import router
+from .proxy import proxy_router
+
+PROFILE_SERVICE_URL = os.getenv("PROFILE_SERVICE_URL", "http://profile-service:8000")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage the lifecycle of the shared HTTP client."""
+async def lifespan(application: FastAPI):
+    application.state.http_client = httpx.AsyncClient(timeout=30.0)
     yield
-    await close_client()
+    await application.state.http_client.aclose()
 
 
 app = FastAPI(title="Fervora API Gateway", lifespan=lifespan)
-app.include_router(router)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "api-gateway"}
+    return {"status": "ok"}
+
+
+app.include_router(proxy_router)

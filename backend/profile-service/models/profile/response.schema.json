@@ -1,9 +1,11 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "PublicProfile",
-  "description": "Public-facing profile view. Excludes sensitive fields.",
+  "title": "ProfileResponse",
+  "description": "Profile response schema.",
   "x-api": [
-    { "method": "GET", "path": "/profiles/{id}", "description": "Get a user's profile", "response": "PublicProfile" }
+    { "method": "GET", "path": "/profiles/me", "description": "Get authenticated user's profile", "response": "ProfileResponse" },
+    { "method": "GET", "path": "/profiles/{id}", "description": "Get a user's profile", "response": "ProfileResponse" },
+    { "method": "DELETE", "path": "/profiles/me", "description": "Soft-delete authenticated user's profile", "response": "204 No Content" }
   ],
   "type": "object",
   "properties": {

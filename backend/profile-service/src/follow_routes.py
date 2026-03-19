@@ -1,108 +1,105 @@
-"""
-Follow routes.
+"""Follow routes — one-way follow model (Instagram-style)."""
 
-One-way follow model (Instagram-style).
-Both follower and target must have existing profiles.
-"""
-
-import asyncio
-
-import httpx
 from fastapi import APIRouter, Header, HTTPException
 
-from .database import create_notification, follow_user, get_followers, get_following, get_push_tokens, unfollow_user, get_profile_by_id
+from .database import get_db
+from .follow_database import create_follow, remove_follow
+from .cache import (
+    get_profile,
+    invalidate_profile_counts,
+    list_followers,
+    list_following,
+    invalidate_followers,
+    invalidate_following,
+)
 
 router = APIRouter(prefix="/follows", tags=["follows"])
 
 
-async def _notify_new_follower(follower_uid: str, target_uid: str):
-    """Send push + in-app notification when someone gains a follower."""
-    try:
-        follower = await get_profile_by_id(follower_uid)
-        name = follower.get("username", "Someone") if follower else "Someone"
-        photo = follower.get("profilePhoto", "") if follower else ""
-        title = f"{name} started following you"
-        await create_notification(
-            target_uid, "follow", title, "",
-            {"followerUid": follower_uid, "followerUsername": name, "profilePhoto": photo},
-        )
-        tokens = await get_push_tokens([target_uid])
-        if not tokens:
-            return
-        messages = [
-            {"to": t, "sound": "default", "title": title,
-             "body": "", "data": {"type": "follow", "followerUsername": name}}
-            for t in tokens
-        ]
-        async with httpx.AsyncClient() as client:
-            await client.post("https://exp.host/--/api/v2/push/send", json=messages,
-                              headers={"Content-Type": "application/json"})
-    except Exception:
-        pass
+# ── Response helpers ──────────────────────────────────────────────────
 
+async def _resolve_profiles(uids: list[str]) -> list[dict]:
+    """Resolve UIDs to minimal profile dicts."""
+    db = get_db()
+    results = []
+    for uid in uids:
+        doc = await get_profile(uid, db)
+        if doc:
+            results.append({
+                "id": doc["_id"],
+                "username": doc["username"],
+                "displayName": doc["displayName"],
+                "profilePhoto": doc.get("profilePhoto"),
+            })
+    return results
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.post("/{uid}", status_code=201)
 async def follow(uid: str, x_user_id: str = Header(...)):
     if x_user_id == uid:
         raise HTTPException(status_code=422, detail="Cannot follow yourself")
-    result = await follow_user(x_user_id, uid)
-    if result is None:
+
+    db = get_db()
+
+    # Both follower and target must have profiles
+    follower_profile = await get_profile(x_user_id, db)
+    if not follower_profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    if result is False:
+
+    target_profile = await get_profile(uid, db)
+    if not target_profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    doc = await create_follow(x_user_id, uid)
+    if doc is None:
         raise HTTPException(status_code=409, detail="Already following")
-    # Fire-and-forget notification
-    asyncio.ensure_future(_notify_new_follower(x_user_id, uid))
+
+    # Invalidate counts + follow lists for both users
+    await invalidate_profile_counts(x_user_id)
+    await invalidate_profile_counts(uid)
+    await invalidate_following(x_user_id)
+    await invalidate_followers(uid)
+
     return {"followerUid": x_user_id, "followingUid": uid}
 
 
 @router.delete("/{uid}", status_code=204)
 async def unfollow(uid: str, x_user_id: str = Header(...)):
-    deleted = await unfollow_user(x_user_id, uid)
-    if not deleted:
+    removed = await remove_follow(x_user_id, uid)
+    if not removed:
         raise HTTPException(status_code=404, detail="Not following this user")
 
-
-async def _resolve_profiles(uids: list[str]) -> list[dict]:
-    """Resolve UIDs to minimal profile dicts."""
-    results = []
-    for uid in uids:
-        doc = await get_profile_by_id(uid)
-        if doc:
-            entry: dict = {
-                "id": doc["_id"],
-                "username": doc["username"],
-                "displayName": doc["displayName"],
-                "profilePhoto": doc.get("profilePhoto"),
-            }
-            if doc.get("location"):
-                entry["location"] = doc["location"]
-            results.append(entry)
-    return results
+    await invalidate_profile_counts(x_user_id)
+    await invalidate_profile_counts(uid)
+    await invalidate_following(x_user_id)
+    await invalidate_followers(uid)
 
 
 @router.get("/following")
-async def list_following(x_user_id: str = Header(...)):
-    uids = await get_following(x_user_id)
+async def my_following(x_user_id: str = Header(...)):
+    uids = await list_following(x_user_id, get_db())
     profiles = await _resolve_profiles(uids)
     return {"following": profiles, "count": len(profiles)}
 
 
 @router.get("/followers")
-async def list_followers(x_user_id: str = Header(...)):
-    uids = await get_followers(x_user_id)
+async def my_followers(x_user_id: str = Header(...)):
+    uids = await list_followers(x_user_id, get_db())
     profiles = await _resolve_profiles(uids)
     return {"followers": profiles, "count": len(profiles)}
 
 
 @router.get("/{uid}/following")
-async def list_user_following(uid: str):
-    uids = await get_following(uid)
+async def user_following(uid: str, x_user_id: str = Header(...)):
+    uids = await list_following(uid, get_db())
     profiles = await _resolve_profiles(uids)
     return {"following": profiles, "count": len(profiles)}
 
 
 @router.get("/{uid}/followers")
-async def list_user_followers(uid: str):
-    uids = await get_followers(uid)
+async def user_followers(uid: str, x_user_id: str = Header(...)):
+    uids = await list_followers(uid, get_db())
     profiles = await _resolve_profiles(uids)
     return {"followers": profiles, "count": len(profiles)}

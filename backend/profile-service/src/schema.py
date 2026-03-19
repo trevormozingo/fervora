@@ -1,95 +1,52 @@
-"""
-Schema loader and validator.
-
-Loads JSON Schema files from models/profile/ and validates data against them.
-Schemas are the single source of truth.
-"""
+"""Schema validation using JSON Schema files under models/."""
 
 import json
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
 
-from jsonschema import Draft7Validator, FormatChecker, ValidationError
-from jsonschema.validators import RefResolver
+from jsonschema import Draft7Validator, FormatChecker, RefResolver
 
-_format_checker = FormatChecker()
 _MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
-
-def _load_schema(path: str) -> dict:
-    with open(_MODELS_DIR / path, "r") as f:
-        return json.load(f)
-
-
-def _build_dir_resolver(subdir: str) -> RefResolver:
-    """Build a RefResolver scoped to a specific models subdirectory."""
-    schema_dir = _MODELS_DIR / subdir
-    base_schema = _load_schema(f"{subdir}/base.schema.json")
-    base_uri = schema_dir.as_uri() + "/"
-    store = {}
-    for schema_file in schema_dir.glob("*.schema.json"):
-        schema = json.loads(schema_file.read_text())
-        store[schema_file.as_uri()] = schema
-        store[schema_file.name] = schema
-    return RefResolver(base_uri, base_schema, store=store)
-
-
-_profile_resolver = _build_dir_resolver("profile")
-_post_resolver = _build_dir_resolver("post")
-_reaction_resolver = _build_dir_resolver("reaction")
-_comment_resolver = _build_dir_resolver("comment")
-_event_resolver = _build_dir_resolver("event")
-
-VALIDATORS = {
-    "create": Draft7Validator(
-        _load_schema("profile/create.schema.json"),
-        resolver=_profile_resolver,
-        format_checker=_format_checker,
-    ),
-    "update": Draft7Validator(
-        _load_schema("profile/update.schema.json"),
-        resolver=_profile_resolver,
-        format_checker=_format_checker,
-    ),
-    "post_create": Draft7Validator(
-        _load_schema("post/create.schema.json"),
-        resolver=_post_resolver,
-        format_checker=_format_checker,
-    ),
-    "reaction_set": Draft7Validator(
-        _load_schema("reaction/set.schema.json"),
-        resolver=_reaction_resolver,
-        format_checker=_format_checker,
-    ),
-    "comment_create": Draft7Validator(
-        _load_schema("comment/create.schema.json"),
-        resolver=_comment_resolver,
-        format_checker=_format_checker,
-    ),
-    "event_create": Draft7Validator(
-        _load_schema("event/create.schema.json"),
-        resolver=_event_resolver,
-        format_checker=_format_checker,
-    ),
-    "event_rsvp": Draft7Validator(
-        _load_schema("event/rsvp.schema.json"),
-        resolver=_event_resolver,
-        format_checker=_format_checker,
-    ),
+_SCHEMA_MAP = {
+    "profile_create": "profile/create.schema.json",
+    "profile_update": "profile/update.schema.json",
+    "profile_response": "profile/response.schema.json",
+    "post_create": "post/create.schema.json",
+    "post_base": "post/base.schema.json",
+    "post_response": "post/response.schema.json",
+    "comment_create": "comment/create.schema.json",
+    "comment_base": "comment/base.schema.json",
+    "comment_response": "comment/response.schema.json",
+    "reaction_set": "reaction/set.schema.json",
+    "reaction_base": "reaction/base.schema.json",
+    "reaction_response": "reaction/response.schema.json",
+    "event_create": "event/create.schema.json",
+    "event_base": "event/base.schema.json",
+    "event_rsvp": "event/rsvp.schema.json",
 }
 
 
-def validate(schema_name: str, data: dict[str, Any]) -> list[str]:
-    """Validate data against a named schema. Returns error messages (empty = valid)."""
-    validator = VALIDATORS.get(schema_name)
-    if validator is None:
-        raise ValueError(f"Unknown schema: {schema_name}")
-    errors = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
-    return [_format_error(e) for e in errors]
+@lru_cache(maxsize=None)
+def _load_schema(schema_key: str) -> tuple[dict, Draft7Validator]:
+    rel = _SCHEMA_MAP[schema_key]
+    schema_path = _MODELS_DIR / rel
+    with open(schema_path) as f:
+        schema = json.load(f)
+    resolver = RefResolver(
+        base_uri=schema_path.parent.as_uri() + "/",
+        referrer=schema,
+    )
+    return schema, Draft7Validator(schema, resolver=resolver, format_checker=FormatChecker())
 
 
-def _format_error(error: ValidationError) -> str:
-    path = ".".join(str(p) for p in error.absolute_path)
-    if path:
-        return f"{path}: {error.message}"
-    return error.message
+def validate(schema_key: str, data: dict) -> list[str]:
+    """Return a list of validation error messages, or [] if valid."""
+    _, v = _load_schema(schema_key)
+    return [e.message for e in v.iter_errors(data)]
+
+
+def get_fields(schema_key: str) -> list[str]:
+    """Return the property names defined in a schema."""
+    schema, _ = _load_schema(schema_key)
+    return list(schema.get("properties", {}).keys())

@@ -1,95 +1,113 @@
-"""
-Comment routes.
+"""Comment routes."""
 
-Comments on posts. Only users with a profile can comment.
-"""
+from fastapi import APIRouter, Header, HTTPException
 
-import asyncio
+from .database import get_db
+from .comment_database import (
+    create_comment,
+    soft_delete_comment,
+)
+from .cache import (
+    get_comment,
+    get_post,
+    get_profile,
+    invalidate_comment,
+    invalidate_comment_list,
+    invalidate_post_comments,
+    invalidate_post_counts,
+    list_comments_by_post,
+)
+from .schema import get_fields, validate
 
-import httpx
-from fastapi import APIRouter, Header, HTTPException, Query, Request
-
-from .database import create_comment, create_notification, delete_comment, get_comments, get_profile_by_id, get_push_tokens
-from .schema import validate
-
-router = APIRouter(prefix="/posts", tags=["comments"])
-
-
-def _to_response(doc: dict) -> dict:
-    """Shape a DB doc into the response.schema.json response."""
-    return {
-        "id": str(doc["_id"]),
-        "postId": str(doc["postId"]),
-        "authorUid": doc["authorUid"],
-        "authorUsername": doc.get("authorUsername", doc["authorUid"]),
-        "authorProfilePhoto": doc.get("authorProfilePhoto"),
-        "body": doc["body"],
-        "createdAt": doc["createdAt"],
-    }
+router = APIRouter(prefix="/posts/{post_id}/comments", tags=["comments"])
 
 
-async def _notify_post_author_comment(post_id: str, commenter_uid: str, comment_body: str):
-    """Send push notification to the post author about a new comment."""
-    try:
-        from .database import _posts
-        from bson import ObjectId
-        post = await _posts().find_one({"_id": ObjectId(post_id)})
-        if not post or post["authorUid"] == commenter_uid:
-            return
-        commenter = await get_profile_by_id(commenter_uid)
-        name = commenter.get("username", "Someone") if commenter else "Someone"
-        photo = commenter.get("profilePhoto", "") if commenter else ""
-        preview = comment_body[:100]
-        title = f"{name} commented on your post"
-        # Save in-app notification
-        await create_notification(
-            post["authorUid"], "comment", title, preview,
-            {"postId": post_id, "commenterUid": commenter_uid, "profilePhoto": photo},
-        )
-        # Send push
-        tokens = await get_push_tokens([post["authorUid"]])
-        if not tokens:
-            return
-        messages = [
-            {"to": t, "sound": "default", "title": title,
-             "body": preview, "data": {"type": "comment", "postId": post_id}}
-            for t in tokens
-        ]
-        async with httpx.AsyncClient() as client:
-            await client.post("https://exp.host/--/api/v2/push/send", json=messages,
-                              headers={"Content-Type": "application/json"})
-    except Exception:
-        pass
+# ── Response builder ──────────────────────────────────────────────────
+
+_RESPONSE_FIELDS: set[str] | None = None
 
 
-@router.post("/{post_id}/comments", status_code=201)
-async def comment(post_id: str, request: Request, x_user_id: str = Header(...)):
-    body = await request.json()
-    errors = validate("comment_create", body)
+def _get_response_fields() -> set[str]:
+    global _RESPONSE_FIELDS
+    if _RESPONSE_FIELDS is None:
+        _RESPONSE_FIELDS = set(get_fields("comment_base")) | set(get_fields("comment_response"))
+    return _RESPONSE_FIELDS
+
+
+async def _to_response(doc: dict) -> dict:
+    """Build a response dict from a DB document."""
+    fields = _get_response_fields()
+
+    author_profile = await get_profile(doc["authorUid"], get_db())
+    author_username = author_profile["username"] if author_profile else None
+    author_photo = author_profile.get("profilePhoto") if author_profile else None
+
+    out: dict = {}
+    for field in fields:
+        if field == "id":
+            out["id"] = doc["_id"]
+        elif field == "authorUsername":
+            out["authorUsername"] = author_username
+        elif field == "authorProfilePhoto":
+            out["authorProfilePhoto"] = author_photo
+        else:
+            out[field] = doc.get(field)
+    return out
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────
+
+@router.post("", status_code=201)
+async def create(post_id: str, request_body: dict, x_user_id: str = Header(...)):
+    # Verify post exists
+    post = await get_post(post_id, get_db())
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    errors = validate("comment_create", request_body)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    doc = await create_comment(post_id, x_user_id, body)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Post not found or profile required")
-    # Fire-and-forget push notification to post author
-    asyncio.ensure_future(_notify_post_author_comment(post_id, x_user_id, body.get("body", "")))
-    return _to_response(doc)
+
+    doc = await create_comment(post_id, x_user_id, request_body)
+
+    # Invalidate cached comment count + recent comments + comment list for this post
+    await invalidate_post_counts(post_id)
+    await invalidate_post_comments(post_id)
+    await invalidate_comment_list(post_id)
+
+    return await _to_response(doc)
 
 
-@router.delete("/{post_id}/comments/{comment_id}", status_code=204)
-async def remove(post_id: str, comment_id: str, x_user_id: str = Header(...)):
-    deleted = await delete_comment(comment_id, x_user_id)
+@router.get("")
+async def list_by_post(post_id: str, x_user_id: str = Header(...)):
+    post = await get_post(post_id, get_db())
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    docs = await list_comments_by_post(post_id, get_db())
+    return [await _to_response(d) for d in docs]
+
+
+@router.get("/{comment_id}")
+async def get_by_id(post_id: str, comment_id: str, x_user_id: str = Header(...)):
+    doc = await get_comment(comment_id, get_db())
+    if not doc or doc.get("postId") != post_id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return await _to_response(doc)
+
+
+@router.delete("/{comment_id}", status_code=204)
+async def delete(post_id: str, comment_id: str, x_user_id: str = Header(...)):
+    # Verify the comment belongs to this post before deleting
+    doc = await get_comment(comment_id, get_db())
+    if not doc or doc.get("postId") != post_id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    deleted = await soft_delete_comment(comment_id, x_user_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Comment not found or not owned by you")
+        raise HTTPException(status_code=404, detail="Comment not found")
 
-
-@router.get("/{post_id}/comments")
-async def list_comments(
-    post_id: str,
-    limit: int = Query(default=50, ge=1, le=100),
-    cursor: str | None = Query(default=None),
-):
-    comments = await get_comments(post_id, limit=limit, cursor=cursor)
-    items = [_to_response(c) for c in comments]
-    next_cursor = items[-1]["id"] if items else None
-    return {"items": items, "count": len(items), "cursor": next_cursor}
+    await invalidate_comment(comment_id)
+    await invalidate_comment_list(post_id)
+    await invalidate_post_counts(post_id)
+    await invalidate_post_comments(post_id)
