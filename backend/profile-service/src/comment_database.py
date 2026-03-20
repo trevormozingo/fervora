@@ -47,6 +47,21 @@ async def create_comment(post_id: str, author_uid: str, data: dict[str, Any]) ->
     return doc
 
 
+async def create_comment_in_session(post_id: str, author_uid: str, data: dict[str, Any], session) -> dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    doc: dict[str, Any] = {
+        "_id": str(ObjectId()),
+        "postId": post_id,
+        "authorUid": author_uid,
+    }
+    for field in get_fields("comment_create"):
+        if field in data:
+            doc[field] = data[field]
+    doc["createdAt"] = now
+    await _comments().insert_one(doc, session=session)
+    return doc
+
+
 async def soft_delete_comment(comment_id: str, author_uid: str) -> bool:
     """Soft-delete a comment. Only the author can delete their own comment."""
     now = datetime.now(timezone.utc).isoformat()

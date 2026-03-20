@@ -44,6 +44,23 @@ async def create_event(author_uid: str, data: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
+async def create_event_in_session(author_uid: str, data: dict[str, Any], session) -> dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    doc: dict[str, Any] = {
+        "_id": str(ObjectId()),
+        "authorUid": author_uid,
+    }
+    for field in get_fields("event_create"):
+        if field == "inviteeUids":
+            uids = data.get("inviteeUids") or []
+            doc["invitees"] = [{"uid": uid, "status": "pending"} for uid in uids]
+        elif field in data:
+            doc[field] = data[field]
+    doc["createdAt"] = now
+    await _events().insert_one(doc, session=session)
+    return doc
+
+
 async def update_event(event_id: str, author_uid: str, data: dict[str, Any]) -> dict[str, Any] | None:
     """Update an event. Only the author can update."""
     now = datetime.now(timezone.utc).isoformat()

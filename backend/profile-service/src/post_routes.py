@@ -1,9 +1,13 @@
 """Post routes."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Header, HTTPException
 
 from .database import get_db
-from .post_database import create_post, soft_delete_post
+from .post_database import create_post, create_post_in_session
+from .transaction import run_transaction
+from .post_database import soft_delete_post
 from .cache import (
     get_post,
     get_profile,
@@ -81,8 +85,19 @@ async def create(request_body: dict, x_user_id: str = Header(...)):
     if errors:
         raise HTTPException(status_code=422, detail=errors)
 
-    doc = await create_post(x_user_id, request_body)
-    # Invalidate profile counts (postCount changed) and post list for this author
+    async def _txn(session):
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.profiles.update_one(
+            {"_id": x_user_id, "isDeleted": {"$ne": True}},
+            {"$set": {"lastActivityAt": now}},
+            session=session,
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=403, detail="Profile is deleted or does not exist")
+        return await create_post_in_session(x_user_id, request_body, session)
+
+    doc = await run_transaction(_txn)
     await invalidate_profile(x_user_id)
     await invalidate_post_list(x_user_id)
     return await _to_response(doc, viewer_uid=x_user_id)

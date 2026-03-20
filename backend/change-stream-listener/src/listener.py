@@ -151,26 +151,33 @@ async def _watch_collection(collection_name: str) -> None:
     if _db is None:
         raise RuntimeError("Database not connected")
 
-    token = await _load_resume_token(collection_name)
-    kwargs: dict[str, Any] = {"full_document": "updateLookup"}
-    if token:
-        kwargs["resume_after"] = token
-        logger.info("Resuming %s from token %s", collection_name, token)
+    while _running:
+        try:
+            token = await _load_resume_token(collection_name)
+            kwargs: dict[str, Any] = {"full_document": "updateLookup"}
+            if token:
+                kwargs["resume_after"] = token
+                logger.info("Resuming %s from token %s", collection_name, token)
 
-    collection = _db[collection_name]
-    async with collection.watch(**kwargs) as stream:
-        logger.info("Watching %s for changes", collection_name)
-        async for change in stream:
-            if not _running:
-                break
-            routing_key = _extract_routing_key(change, collection_name)
-            event = _build_event(change, collection_name)
-            await _publish_event(routing_key, event)
-            await _save_resume_token(collection_name, stream.resume_token)
-            logger.debug(
-                "Published %s event for %s (key=%s)",
-                event["operationType"], collection_name, routing_key,
-            )
+            collection = _db[collection_name]
+            async with collection.watch(**kwargs) as stream:
+                logger.info("Watching %s for changes", collection_name)
+                async for change in stream:
+                    if not _running:
+                        break
+                    routing_key = _extract_routing_key(change, collection_name)
+                    event = _build_event(change, collection_name)
+                    await _publish_event(routing_key, event)
+                    await _save_resume_token(collection_name, stream.resume_token)
+                    logger.info(
+                        "Published %s event for %s (key=%s)",
+                        event["operationType"], collection_name, routing_key,
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Error in change stream watcher for %s, restarting in 2s", collection_name)
+            await asyncio.sleep(2)
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────

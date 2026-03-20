@@ -1,5 +1,6 @@
 """Redis read-through cache for entities and computed aggregations."""
 
+import hashlib
 import json
 
 import redis.asyncio as redis
@@ -349,6 +350,50 @@ async def invalidate_post_reaction(post_id: str, viewer_uid: str) -> None:
     """Delete a user's cached reaction on a post."""
     r = _get_redis()
     await r.delete(f"post_reaction:{post_id}:{viewer_uid}")
+
+
+# ── Feed cache ────────────────────────────────────────────────────────
+
+async def get_feed_page(
+    owner_uid: str, db, following_uids: list[str],
+    limit: int = 20, cursor: str | None = None,
+) -> list[dict]:
+    """Read-through cache for a feed page. Returns list of {postId, createdAt} dicts."""
+    if not following_uids:
+        return []
+
+    r = _get_redis()
+    # Include a hash of the following list so cache busts when follows change
+    fh = hashlib.md5("|".join(sorted(following_uids)).encode()).hexdigest()[:8]
+    cache_key = f"feed:{owner_uid}:{cursor or ''}:{limit}:{fh}"
+
+    cached = await r.get(cache_key)
+    if cached is not None:
+        return json.loads(cached)
+
+    query: dict = {
+        "ownerUid": owner_uid,
+        "isDeleted": {"$ne": True},
+        "authorUid": {"$in": following_uids},
+    }
+    if cursor:
+        query["createdAt"] = {"$lt": cursor}
+
+    feed_cursor = (
+        db.feed.find(query, {"postId": 1, "createdAt": 1, "_id": 0})
+        .sort("createdAt", -1)
+        .limit(limit)
+    )
+    docs = await feed_cursor.to_list(length=limit)
+    await r.set(cache_key, json.dumps(docs, default=str), ex=ENTITY_TTL)
+    return docs
+
+
+async def invalidate_feed(owner_uid: str) -> None:
+    """Delete all cached feed pages for a user."""
+    r = _get_redis()
+    async for key in r.scan_iter(match=f"feed:{owner_uid}:*"):
+        await r.delete(key)
 
 
 async def _compute_post_counts(post_id: str, db) -> dict:

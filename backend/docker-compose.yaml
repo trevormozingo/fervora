@@ -30,9 +30,10 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
       RABBITMQ_PLUGINS: rabbitmq_consistent_hash_exchange
+    volumes:
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./rabbitmq/20-definitions.conf:/etc/rabbitmq/conf.d/20-definitions.conf:ro
     healthcheck:
       test: >
         rabbitmq-diagnostics -q ping &&
@@ -99,6 +100,27 @@ services:
       timeout: 5s
       retries: 10
 
+  event-processor:
+    build:
+      context: event-processor
+      dockerfile: Dockerfile
+    profiles: [worker]
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
+      MONGO_DB: fervora_test
+      NUM_QUEUES: 20
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   test-client:
     build:
       context: .
@@ -108,6 +130,7 @@ services:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
       MONGO_DB: fervora_test
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
     depends_on:
       api-gateway:
         condition: service_healthy

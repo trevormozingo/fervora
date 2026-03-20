@@ -1,9 +1,12 @@
 """Follow routes — one-way follow model (Instagram-style)."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Header, HTTPException
 
 from .database import get_db
-from .follow_database import create_follow, remove_follow
+from .follow_database import create_follow, create_follow_in_session, remove_follow
+from .transaction import run_transaction
 from .cache import (
     get_profile,
     invalidate_profile_counts,
@@ -41,21 +44,31 @@ async def follow(uid: str, x_user_id: str = Header(...)):
     if x_user_id == uid:
         raise HTTPException(status_code=422, detail="Cannot follow yourself")
 
-    db = get_db()
+    async def _txn(session):
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.profiles.update_one(
+            {"_id": x_user_id, "isDeleted": {"$ne": True}},
+            {"$set": {"lastActivityAt": now}},
+            session=session,
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=403, detail="Profile is deleted or does not exist")
 
-    # Both follower and target must have profiles
-    follower_profile = await get_profile(x_user_id, db)
-    if not follower_profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        target_result = await db.profiles.update_one(
+            {"_id": uid, "isDeleted": {"$ne": True}},
+            {"$set": {"lastActivityAt": now}},
+            session=session,
+        )
+        if target_result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Target profile not found")
 
-    target_profile = await get_profile(uid, db)
-    if not target_profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        doc = await create_follow_in_session(x_user_id, uid, session)
+        if doc is None:
+            raise HTTPException(status_code=409, detail="Already following")
+        return doc
 
-    doc = await create_follow(x_user_id, uid)
-    if doc is None:
-        raise HTTPException(status_code=409, detail="Already following")
-
+    await run_transaction(_txn)
     # Invalidate counts + follow lists for both users
     await invalidate_profile_counts(x_user_id)
     await invalidate_profile_counts(uid)

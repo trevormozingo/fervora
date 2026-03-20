@@ -22,8 +22,45 @@ async def connect(mongo_uri: str, db_name: str = "fervora") -> None:
     global _client, _db
     _client = AsyncIOMotorClient(mongo_uri)
     _db = _client[db_name]
+
+    # Profiles
     await _db.profiles.create_index("username", unique=True)
     await _db.profiles.create_index([("location", "2dsphere")])
+
+    # Posts
+    await _db.posts.create_index([("authorUid", 1), ("isDeleted", 1), ("createdAt", -1)])
+
+    # Comments
+    await _db.comments.create_index([("postId", 1), ("isDeleted", 1), ("createdAt", -1)])
+    await _db.comments.create_index([("authorUid", 1), ("isDeleted", 1)])
+
+    # Reactions
+    await _db.reactions.create_index(
+        [("postId", 1), ("authorUid", 1)],
+        unique=True,
+    )
+    await _db.reactions.create_index([("postId", 1), ("isDeleted", 1)])
+
+    # Events
+    await _db.events.create_index([("authorUid", 1), ("isDeleted", 1), ("startTime", -1)])
+    await _db.events.create_index([("invitees.uid", 1), ("isDeleted", 1)])
+
+    # Follows
+    await _db.follows.create_index(
+        [("followerId", 1), ("followedId", 1)],
+        unique=True,
+    )
+    await _db.follows.create_index([("followerId", 1), ("isDeleted", 1)])
+    await _db.follows.create_index([("followedId", 1), ("isDeleted", 1)])
+
+    # Feed (fan-out-on-write)
+    await _db.feed.create_index(
+        [("ownerUid", 1), ("postId", 1)],
+        unique=True,
+    )
+    await _db.feed.create_index([("ownerUid", 1), ("isDeleted", 1), ("createdAt", -1)])
+    await _db.feed.create_index([("ownerUid", 1), ("authorUid", 1), ("isDeleted", 1)])
+    await _db.feed.create_index([("postId", 1), ("isDeleted", 1)])
 
 
 async def disconnect() -> None:
@@ -44,6 +81,12 @@ def get_db():
     if _db is None:
         raise RuntimeError("Database not connected")
     return _db
+
+
+def get_client():
+    if _client is None:
+        raise RuntimeError("Database not connected")
+    return _client
 
 
 # ── Active-only filter ────────────────────────────────────────────────

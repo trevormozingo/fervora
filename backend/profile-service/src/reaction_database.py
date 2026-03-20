@@ -8,8 +8,6 @@ soft-deletes. Soft-delete pattern matches profiles/posts/comments.
 from datetime import datetime, timezone
 from typing import Any
 
-from bson import ObjectId
-
 from .database import get_db
 
 
@@ -27,28 +25,32 @@ def _active(extra: dict[str, Any] | None = None) -> dict[str, Any]:
 async def set_reaction(post_id: str, author_uid: str, reaction_type: str) -> dict[str, Any]:
     """Set (upsert) a reaction. One active reaction per user per post."""
     now = datetime.now(timezone.utc).isoformat()
-
-    existing = await _reactions().find_one(
-        _active({"postId": post_id, "authorUid": author_uid})
+    return await _reactions().find_one_and_update(
+        {"postId": post_id, "authorUid": author_uid},
+        {
+            "$set": {"reactionType": reaction_type, "isDeleted": False, "updatedAt": now},
+            "$unset": {"deletedAt": ""},
+            "$setOnInsert": {"createdAt": now},
+        },
+        upsert=True,
+        return_document=True,
     )
 
-    if existing:
-        await _reactions().update_one(
-            {"_id": existing["_id"]},
-            {"$set": {"reactionType": reaction_type, "updatedAt": now}},
-        )
-        existing["reactionType"] = reaction_type
-        return existing
 
-    doc: dict[str, Any] = {
-        "_id": str(ObjectId()),
-        "postId": post_id,
-        "authorUid": author_uid,
-        "reactionType": reaction_type,
-        "createdAt": now,
-    }
-    await _reactions().insert_one(doc)
-    return doc
+async def set_reaction_in_session(post_id: str, author_uid: str, reaction_type: str, session) -> dict[str, Any]:
+    """Set (upsert) a reaction within a transaction."""
+    now = datetime.now(timezone.utc).isoformat()
+    return await _reactions().find_one_and_update(
+        {"postId": post_id, "authorUid": author_uid},
+        {
+            "$set": {"reactionType": reaction_type, "isDeleted": False, "updatedAt": now},
+            "$unset": {"deletedAt": ""},
+            "$setOnInsert": {"createdAt": now},
+        },
+        upsert=True,
+        return_document=True,
+        session=session,
+    )
 
 
 async def remove_reaction(post_id: str, author_uid: str) -> bool:

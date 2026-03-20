@@ -9,8 +9,6 @@ and a `deletedAt` timestamp is recorded.
 from datetime import datetime, timezone
 from typing import Any
 
-from bson import ObjectId
-
 from .database import get_db
 
 
@@ -27,21 +25,45 @@ def _active(extra: dict[str, Any] | None = None) -> dict[str, Any]:
 
 async def create_follow(follower_uid: str, followed_uid: str) -> dict[str, Any] | None:
     """Create a follow relationship. Returns the doc, or None if already following."""
-    existing = await _follows().find_one(
-        _active({"followerId": follower_uid, "followedId": followed_uid})
-    )
-    if existing:
-        return None  # already following
-
     now = datetime.now(timezone.utc).isoformat()
-    doc: dict[str, Any] = {
-        "_id": str(ObjectId()),
-        "followerId": follower_uid,
-        "followedId": followed_uid,
-        "createdAt": now,
-    }
-    await _follows().insert_one(doc)
-    return doc
+    before = await _follows().find_one_and_update(
+        {"followerId": follower_uid, "followedId": followed_uid},
+        {
+            "$set": {"isDeleted": False},
+            "$unset": {"deletedAt": ""},
+            "$setOnInsert": {"createdAt": now},
+        },
+        upsert=True,
+        return_document=False,
+    )
+    # If doc existed and was already active, it's a duplicate follow
+    if before is not None and before.get("isDeleted") is False:
+        return None
+    return await _follows().find_one(
+        {"followerId": follower_uid, "followedId": followed_uid}
+    )
+
+
+async def create_follow_in_session(follower_uid: str, followed_uid: str, session) -> dict[str, Any] | None:
+    """Create a follow relationship within a transaction."""
+    now = datetime.now(timezone.utc).isoformat()
+    before = await _follows().find_one_and_update(
+        {"followerId": follower_uid, "followedId": followed_uid},
+        {
+            "$set": {"isDeleted": False},
+            "$unset": {"deletedAt": ""},
+            "$setOnInsert": {"createdAt": now},
+        },
+        upsert=True,
+        return_document=False,
+        session=session,
+    )
+    if before is not None and before.get("isDeleted") is False:
+        return None
+    return await _follows().find_one(
+        {"followerId": follower_uid, "followedId": followed_uid},
+        session=session,
+    )
 
 
 async def remove_follow(follower_uid: str, followed_uid: str) -> bool:

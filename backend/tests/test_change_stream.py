@@ -21,9 +21,8 @@ MONGO_DB = os.getenv("MONGO_DB", "fervora_test")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
 EXCHANGE_NAME = "events.consistent"
-# We'll create 4 test queues to validate consistent hashing
-NUM_TEST_QUEUES = 4
-TEST_QUEUE_PREFIX = "test-events-"
+NUM_QUEUES = 20
+QUEUE_PREFIX = "events-"
 
 
 def _url(path: str) -> str:
@@ -39,26 +38,20 @@ def _rmq_connection():
     return pika.BlockingConnection(params)
 
 
-def _drain_queue(channel, queue_name, timeout=5.0):
-    """Consume all messages from a queue within timeout. Returns list of decoded bodies."""
-    messages = []
+def _drain_all_queues(channel, timeout=5.0):
+    """Drain all queues in a single time window. Returns dict of queue_name -> [messages]."""
+    queues = [f"{QUEUE_PREFIX}{i}" for i in range(NUM_QUEUES)]
+    result = {q: [] for q in queues}
     deadline = time.time() + timeout
     while time.time() < deadline:
-        method, _, body = channel.basic_get(queue=queue_name, auto_ack=True)
-        if method:
-            messages.append(json.loads(body))
-        else:
-            # No message ready — short sleep then retry
+        got_any = False
+        for q in queues:
+            method, _, body = channel.basic_get(queue=q, auto_ack=True)
+            if method:
+                result[q].append(json.loads(body))
+                got_any = True
+        if not got_any:
             time.sleep(0.2)
-    return messages
-
-
-def _drain_all_queues(channel, timeout=5.0):
-    """Drain all test queues. Returns dict of queue_name -> [messages]."""
-    result = {}
-    for i in range(NUM_TEST_QUEUES):
-        q = f"{TEST_QUEUE_PREFIX}{i}"
-        result[q] = _drain_queue(channel, q, timeout=timeout)
     return result
 
 
@@ -75,7 +68,7 @@ def _find_messages(all_queues, **match):
 # ── Setup / Teardown ─────────────────────────────────────────────────
 
 def setup_module():
-    """Clear test data and bind test queues to the consistent hash exchange."""
+    """Clear test data, flush cache, and purge queues."""
     # Clean MongoDB
     client = pymongo.MongoClient(MONGO_URI)
     db = client[MONGO_DB]
@@ -84,17 +77,11 @@ def setup_module():
     db.change_stream_resume_tokens.delete_many({})
     client.close()
 
-    # Set up test queues bound to the consistent hash exchange
+    # Purge any leftover messages
     conn = _rmq_connection()
     ch = conn.channel()
-    for i in range(NUM_TEST_QUEUES):
-        q = f"{TEST_QUEUE_PREFIX}{i}"
-        ch.queue_declare(queue=q, durable=True)
-        # Weight of "1" — each queue gets an equal share of the hash ring
-        ch.queue_bind(exchange=EXCHANGE_NAME, queue=q, routing_key="1")
-    # Purge any leftover messages
-    for i in range(NUM_TEST_QUEUES):
-        ch.queue_purge(queue=f"{TEST_QUEUE_PREFIX}{i}")
+    for i in range(NUM_QUEUES):
+        ch.queue_purge(queue=f"{QUEUE_PREFIX}{i}")
     conn.close()
 
     # Give the listener a moment to be fully watching
@@ -102,15 +89,7 @@ def setup_module():
 
 
 def teardown_module():
-    """Remove test queues."""
-    try:
-        conn = _rmq_connection()
-        ch = conn.channel()
-        for i in range(NUM_TEST_QUEUES):
-            ch.queue_delete(queue=f"{TEST_QUEUE_PREFIX}{i}")
-        conn.close()
-    except Exception:
-        pass
+    pass
 
 
 # ── Helpers ───────────────────────────────────────────────────────────

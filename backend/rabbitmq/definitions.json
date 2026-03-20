@@ -1,0 +1,68 @@
+{
+  "users": [
+    {
+      "name": "guest",
+      "password": "guest",
+      "tags": ["administrator"]
+    }
+  ],
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "permissions": [
+    { "user": "guest", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*" }
+  ],
+  "exchanges": [
+    {
+      "name": "events.consistent",
+      "vhost": "/",
+      "type": "x-consistent-hash",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "queues": [
+    { "name": "events-0", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-1", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-2", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-3", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-4", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-5", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-6", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-7", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-8", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-9", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-10", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-11", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-12", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-13", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-14", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-15", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-16", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-17", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-18", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } },
+    { "name": "events-19", "vhost": "/", "durable": true, "arguments": { "x-single-active-consumer": true } }
+  ],
+  "bindings": [
+    { "source": "events.consistent", "vhost": "/", "destination": "events-0", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-1", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-2", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-3", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-4", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-5", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-6", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-7", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-8", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-9", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-10", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-11", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-12", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-13", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-14", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-15", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-16", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-17", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-18", "destination_type": "queue", "routing_key": "1" },
+    { "source": "events.consistent", "vhost": "/", "destination": "events-19", "destination_type": "queue", "routing_key": "1" }
+  ]
+}

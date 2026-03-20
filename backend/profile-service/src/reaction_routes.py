@@ -1,9 +1,12 @@
 """Reaction routes — one reaction per user per post."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Header, HTTPException
 
 from .database import get_db
-from .reaction_database import remove_reaction, set_reaction
+from .reaction_database import remove_reaction, set_reaction, set_reaction_in_session
+from .transaction import run_transaction
 from .cache import (
     get_post,
     get_profile,
@@ -40,7 +43,7 @@ async def _to_response(doc: dict) -> dict:
     out: dict = {}
     for field in fields:
         if field == "id":
-            out["id"] = doc["_id"]
+            out["id"] = str(doc["_id"])
         elif field == "type":
             out["type"] = doc.get("reactionType")
         elif field == "username":
@@ -65,8 +68,19 @@ async def set_user_reaction(post_id: str, request_body: dict, x_user_id: str = H
     if errors:
         raise HTTPException(status_code=422, detail=errors)
 
-    doc = await set_reaction(post_id, x_user_id, request_body["type"])
+    async def _txn(session):
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.profiles.update_one(
+            {"_id": x_user_id, "isDeleted": {"$ne": True}},
+            {"$set": {"lastActivityAt": now}},
+            session=session,
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=403, detail="Profile is deleted or does not exist")
+        return await set_reaction_in_session(post_id, x_user_id, request_body["type"], session)
 
+    doc = await run_transaction(_txn)
     await invalidate_post_counts(post_id)
     await invalidate_post_reaction(post_id, x_user_id)
     await invalidate_reaction_list(post_id)

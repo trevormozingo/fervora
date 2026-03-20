@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, Response
 PROFILE_SERVICE_URL = os.getenv("PROFILE_SERVICE_URL", "http://profile-service:8000")
 
 # Routes that get proxied to profile-service
-_PROFILE_PREFIXES = ("/profiles", "/posts", "/events", "/follows")
+_PROFILE_PREFIXES = ("/profiles", "/posts", "/events", "/follows", "/feed")
 
 proxy_router = APIRouter()
 

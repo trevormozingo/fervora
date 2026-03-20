@@ -1,12 +1,16 @@
 """Comment routes."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Header, HTTPException
 
 from .database import get_db
 from .comment_database import (
     create_comment,
+    create_comment_in_session,
     soft_delete_comment,
 )
+from .transaction import run_transaction
 from .cache import (
     get_comment,
     get_post,
@@ -59,7 +63,7 @@ async def _to_response(doc: dict) -> dict:
 
 @router.post("", status_code=201)
 async def create(post_id: str, request_body: dict, x_user_id: str = Header(...)):
-    # Verify post exists
+    # Verify post exists (cached)
     post = await get_post(post_id, get_db())
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -68,8 +72,19 @@ async def create(post_id: str, request_body: dict, x_user_id: str = Header(...))
     if errors:
         raise HTTPException(status_code=422, detail=errors)
 
-    doc = await create_comment(post_id, x_user_id, request_body)
+    async def _txn(session):
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.profiles.update_one(
+            {"_id": x_user_id, "isDeleted": {"$ne": True}},
+            {"$set": {"lastActivityAt": now}},
+            session=session,
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=403, detail="Profile is deleted or does not exist")
+        return await create_comment_in_session(post_id, x_user_id, request_body, session)
 
+    doc = await run_transaction(_txn)
     # Invalidate cached comment count + recent comments + comment list for this post
     await invalidate_post_counts(post_id)
     await invalidate_post_comments(post_id)
