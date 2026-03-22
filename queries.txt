@@ -1,5 +1,3 @@
-
-
 mutation {
   createProfile(input: {
     username: "trevor_m"
@@ -49,8 +47,6 @@ mutation {
     }
   }) {
     id
-    authorUid
-    authorUsername
     title
     body
     workout {
@@ -62,33 +58,18 @@ mutation {
   }
 }
 
-query {
-  post(id: "REPLACE_WITH_POST_ID") {
-    id
-    authorUid
-    authorUsername
-    title
-    body
-    workout {
-      activityType
-      durationSeconds
-      distanceMiles
-      caloriesBurned
-      avgHeartRate
-    }
-    bodyMetrics {
-      weightLbs
-      bodyFatPercentage
-    }
-    createdAt
-  }
-}
 
-query {
-  userPosts(userId: "REPLACE_WITH_USER_ID", limit: 10, offset: 0) {
+query TestSinglePost {
+  post(id: "69bfb7ddad0b94eb53c9775f") {
     id
     title
     body
     createdAt
+    author {
+      id
+      username
+      displayName
+      profilePhoto
+    }
   }
 }

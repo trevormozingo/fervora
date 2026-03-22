@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from typing import Optional
 from bson import ObjectId
+from bson.errors import InvalidId
 import strawberry
 from strawberry.types import Info
 
@@ -62,10 +64,14 @@ class PostQuery:
         """Get a single post by ID."""
         db = info.context["db"]
         redis = info.context["redis"]
+        try:
+            oid = ObjectId(str(id))
+        except InvalidId:
+            raise ValueError("invalid post id")
         key = _post_key(str(id))
         doc = await get_cached(redis, key)
         if not doc:
-            doc = await db.posts.find_one({"_id": ObjectId(str(id))})
+            doc = await db.posts.find_one({"_id": oid})
             if not doc:
                 raise ValueError("post not found")
             doc["_id"] = str(doc["_id"])
@@ -73,11 +79,23 @@ class PostQuery:
         return _post_from_doc(doc)
 
     @strawberry.field
-    async def user_posts(self, info: Info, user_id: strawberry.ID, limit: int = 20, offset: int = 0) -> list[Post]:
-        """Get all posts by a user."""
+    async def user_posts(
+        self,
+        info: Info,
+        user_id: strawberry.ID,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> list[Post]:
+        """Get posts by a user, newest first, with cursor-based pagination."""
         db = info.context["db"]
-        cursor = db.posts.find({"authorUid": str(user_id)}).sort("createdAt", -1).skip(offset).limit(limit)
-        docs = await cursor.to_list(length=limit)
+        query: dict = {"authorUid": str(user_id)}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+        db_cursor = db.posts.find(query).sort("_id", -1).limit(limit)
+        docs = await db_cursor.to_list(length=limit)
         return [_post_from_doc({**d, "_id": str(d["_id"])}) for d in docs]
 
 
