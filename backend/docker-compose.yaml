@@ -1,3 +1,5 @@
+name: backend
+
 services:
   mongodb:
     image: mongo:7
@@ -24,34 +26,15 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_PLUGINS: rabbitmq_consistent_hash_exchange
-    volumes:
-      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
-      - ./rabbitmq/20-definitions.conf:/etc/rabbitmq/conf.d/20-definitions.conf:ro
-    healthcheck:
-      test: >
-        rabbitmq-diagnostics -q ping &&
-        rabbitmq-plugins is_enabled rabbitmq_consistent_hash_exchange
-      interval: 5s
-      timeout: 10s
-      retries: 10
-    entrypoint: >
-      sh -c "rabbitmq-plugins enable --offline rabbitmq_consistent_hash_exchange &&
-             docker-entrypoint.sh rabbitmq-server"
-
-  profile-service:
+  graphql-service:
     build:
       context: profile-service
       dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     environment:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: fervora_test
+      MONGO_DB: fervora
       REDIS_URL: redis://redis:6379
     depends_on:
       mongodb:
@@ -64,75 +47,36 @@ services:
       timeout: 5s
       retries: 5
 
-  api-gateway:
-    build:
-      context: api-gateway
-      dockerfile: Dockerfile
+  mongo-express:
+    image: mongo-express:1
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
-      PROFILE_SERVICE_URL: http://profile-service:8000
-    depends_on:
-      profile-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  change-stream-listener:
-    build:
-      context: change-stream-listener
-      dockerfile: Dockerfile
-    environment:
-      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: fervora_test
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
+      ME_CONFIG_BASICAUTH: "false"
     depends_on:
       mongodb:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
-  event-processor:
-    build:
-      context: event-processor
-      dockerfile: Dockerfile
-    profiles: [worker]
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8082:8081"
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
-      MONGO_DB: fervora_test
-      NUM_QUEUES: 20
+      REDIS_HOSTS: local:redis:6379
     depends_on:
-      mongodb:
+      redis:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   test-client:
     build:
       context: .
       dockerfile: Dockerfile.test
     environment:
-      SERVICE_URL: http://api-gateway:8080
+      SERVICE_URL: http://graphql-service:8000
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
       MONGO_DB: fervora_test
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_URL: redis://redis:6379
     depends_on:
-      api-gateway:
-        condition: service_healthy
-      change-stream-listener:
+      graphql-service:
         condition: service_healthy

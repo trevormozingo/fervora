@@ -1,48 +1,55 @@
-"""Profile service entry point."""
-
 import os
 from contextlib import asynccontextmanager
+import strawberry
+from fastapi import FastAPI, Request, HTTPException
+from strawberry.fastapi import GraphQLRouter
+from strawberry.tools import merge_types
+from motor.motor_asyncio import AsyncIOMotorClient
+from redis.asyncio import Redis
 
-from fastapi import FastAPI
+from .database import init_db
+from .resolvers.profiles import ProfileQuery, ProfileMutation
+from .resolvers.posts import PostQuery, PostMutation
+from .loaders import make_profile_loader
 
-from .database import connect, disconnect
-from .cache import connect as cache_connect, disconnect as cache_disconnect
-from .routes import router
-from .post_routes import router as post_router
-from .comment_routes import router as comment_router
-from .reaction_routes import router as reaction_router
-from .event_routes import router as event_router
-from .follow_routes import router as follow_router
-from .feed_routes import router as feed_router
+_mongo_client: AsyncIOMotorClient | None = None
+_redis: Redis | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    db_name = os.getenv("MONGO_DB", "fervora")
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    await connect(mongo_uri, db_name)
-    await cache_connect(redis_url)
+    global _mongo_client, _redis
+    _mongo_client = AsyncIOMotorClient(os.environ["MONGO_URI"])
+    _redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    await init_db(_mongo_client[os.environ.get("MONGO_DB", "fervora")])
     yield
-    await cache_disconnect()
-    await disconnect()
+    _mongo_client.close()
+    await _redis.aclose()
 
 
-app = FastAPI(
-    title="Fervora Profile Service",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+def get_context(request: Request):
+    user_id = request.headers.get("x-user-id")
+    if not user_id and request.method != "GET":
+        raise HTTPException(status_code=401, detail="x-user-id header is required")
+    db = _mongo_client[os.environ.get("MONGO_DB", "fervora")]
+    return {
+        "user_id": user_id,
+        "db": db,
+        "redis": _redis,
+        "profile_loader": make_profile_loader(db, _redis),
+    }
 
-app.include_router(router)
-app.include_router(post_router)
-app.include_router(comment_router)
-app.include_router(reaction_router)
-app.include_router(event_router)
-app.include_router(follow_router)
-app.include_router(feed_router)
+
+Query = merge_types("Query", (ProfileQuery, PostQuery))
+Mutation = merge_types("Mutation", (ProfileMutation, PostMutation))
+
+schema = strawberry.Schema(query=Query, mutation=Mutation)
+graphql_app = GraphQLRouter(schema, context_getter=get_context)
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(graphql_app, prefix="/graphql")
 
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "ok"}

@@ -1,0 +1,94 @@
+
+
+mutation {
+  createProfile(input: {
+    username: "trevor_m"
+    displayName: "Trevor"
+    profilePhoto: "https://example.com/photo.jpg"
+    birthday: "1995-06-15"
+    bio: "Powerlifter and trail runner"
+    fitnessLevel: "intermediate"
+    interests: ["Powerlifting", "Trail Running"]
+  }) {
+    id
+    username
+    displayName
+    bio
+    fitnessLevel
+    interests
+  }
+}
+
+query {
+  profile(id: "user123") {
+    id
+    username
+    displayName
+    bio
+    fitnessLevel
+    interests
+  }
+}
+
+mutation {
+  deleteProfile
+}
+
+# ── Post ──────────────────────────────────────────────────────────────────────
+
+mutation {
+  createPost(input: {
+    title: "Morning run PR"
+    body: "Hit a new 5k personal record today!"
+    workout: {
+      activityType: "running"
+      durationSeconds: 1320
+      distanceMiles: 3.1
+      caloriesBurned: 310
+      avgHeartRate: 158
+    }
+  }) {
+    id
+    authorUid
+    authorUsername
+    title
+    body
+    workout {
+      activityType
+      durationSeconds
+      distanceMiles
+    }
+    createdAt
+  }
+}
+
+query {
+  post(id: "REPLACE_WITH_POST_ID") {
+    id
+    authorUid
+    authorUsername
+    title
+    body
+    workout {
+      activityType
+      durationSeconds
+      distanceMiles
+      caloriesBurned
+      avgHeartRate
+    }
+    bodyMetrics {
+      weightLbs
+      bodyFatPercentage
+    }
+    createdAt
+  }
+}
+
+query {
+  userPosts(userId: "REPLACE_WITH_USER_ID", limit: 10, offset: 0) {
+    id
+    title
+    body
+    createdAt
+  }
+}
