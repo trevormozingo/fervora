@@ -98,6 +98,7 @@ class PostMutation:
             "storagePostId": input.storage_post_id,
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "isDeleted": False,
+            "isDeleted": False
         }
 
         if input.media:

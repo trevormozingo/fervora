@@ -18,7 +18,7 @@ mutation {
 }
 
 query {
-  profile(id: "user123") {
+  profile(id: "trevor") {
     id
     username
     displayName
@@ -60,7 +60,7 @@ mutation {
 
 
 query TestSinglePost {
-  post(id: "69bfb7ddad0b94eb53c9775f") {
+  post(id: "69c0a094194685fe1770c4b2") {
     id
     title
     body
@@ -72,4 +72,72 @@ query TestSinglePost {
       profilePhoto
     }
   }
+}
+
+# ── Comments ──────────────────────────────────────────────────────────────────
+
+mutation TestCreateComment {
+  createComment(input: {
+    postId: "69c0a094194685fe1770c4b2"
+    body: "Great run! What shoes are you using?"
+  }) {
+    id
+    body
+    postId
+    createdAt
+    author {
+      id
+      username
+      displayName
+    }
+  }
+}
+
+query TestPostComments {
+  post(id: "69c0a094194685fe1770c4b2") {
+    id
+    title
+    comments(limit: 10) {
+      id
+      body
+      createdAt
+      author {
+        id
+        username
+        displayName
+      }
+    }
+  }
+}
+
+query TestPostCommentsPaginated {
+  post(id: "69c0a094194685fe1770c4b2") {
+    id
+    comments(limit: 5, cursor: "REPLACE_WITH_LAST_COMMENT_ID") {
+      id
+      body
+      createdAt
+      author {
+        username
+      }
+    }
+  }
+}
+
+query TestSingleComment {
+  comment(id: "REPLACE_WITH_COMMENT_ID") {
+    id
+    body
+    postId
+    createdAt
+    author {
+      id
+      username
+      displayName
+    }
+  }
+}
+
+mutation TestDeleteComment {
+  deleteComment(id: "REPLACE_WITH_COMMENT_ID")
 }

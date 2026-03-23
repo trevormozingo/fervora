@@ -10,3 +10,9 @@ async def init_db(db) -> None:
     posts = db.posts
     await posts.create_index([("authorUid", ASCENDING)])
     await posts.create_index([("createdAt", ASCENDING)])
+    await posts.create_index([("isDeleted", ASCENDING)])
+
+    comments = db.comments
+    await comments.create_index([("postId", ASCENDING)])
+    await comments.create_index([("authorUid", ASCENDING)])
+    await comments.create_index([("isDeleted", ASCENDING)])

@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import strawberry
 from strawberry.types import Info
 from .profile import Profile
+
+if TYPE_CHECKING:
+    from .comment import Comment
 
 
 VALID_ACTIVITY_TYPES = {
@@ -80,6 +83,26 @@ class Post:
     @strawberry.field
     async def author(self, info: Info) -> Optional[Profile]:
         return await info.context["profile_loader"].load(self.author_uid)
+
+    @strawberry.field
+    async def comments(
+        self,
+        info: Info,
+        limit: int = 10,
+        cursor: Optional[str] = None,
+    ) -> list[Comment]:
+        from ..resolvers.comments import _comment_from_doc
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        db = info.context["db"]
+        query: dict = {"postId": str(self.id), "isDeleted": {"$ne": True}}
+        if cursor:
+            try:
+                query["_id"] = {"$gt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+        docs = await db.comments.find(query).sort("_id", 1).limit(limit).to_list(length=limit)
+        return [_comment_from_doc({**d, "_id": str(d["_id"])}) for d in docs]
 
 
 # ── Input types ───────────────────────────────────────────────────────────────

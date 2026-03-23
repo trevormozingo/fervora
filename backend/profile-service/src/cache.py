@@ -13,6 +13,10 @@ def _post_key(post_id: str) -> str:
     return f"post:{post_id}"
 
 
+def _comment_key(comment_id: str) -> str:
+    return f"comment:{comment_id}"
+
+
 async def get_cached(redis: Redis, key: str):
     raw = await redis.get(key)
     if raw is None:
