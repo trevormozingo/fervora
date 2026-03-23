@@ -17,6 +17,10 @@ def _comment_key(comment_id: str) -> str:
     return f"comment:{comment_id}"
 
 
+def _reaction_key(reaction_id: str) -> str:
+    return f"reaction:{reaction_id}"
+
+
 async def get_cached(redis: Redis, key: str):
     raw = await redis.get(key)
     if raw is None:

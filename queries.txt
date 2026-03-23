@@ -141,3 +141,52 @@ query TestSingleComment {
 mutation TestDeleteComment {
   deleteComment(id: "REPLACE_WITH_COMMENT_ID")
 }
+
+# ── Reactions ─────────────────────────────────────────────────────────────────
+
+# Feed view: counts + viewer's own reaction (no list of users)
+query TestReactionSummaries {
+  post(id: "REPLACE_WITH_POST_ID") {
+    id
+    title
+    viewerReaction
+    reactionSummaries {
+      reactionType
+      count
+    }
+  }
+}
+
+# Tap the 🔥 badge — load users who reacted with fire
+query TestReactionDropdown {
+  post(id: "REPLACE_WITH_POST_ID") {
+    reactions(limit: 20, reactionType: "fire") {
+      id
+      reactionType
+      author {
+        id
+        username
+        displayName
+      }
+    }
+  }
+}
+
+mutation TestSetReaction {
+  setReaction(input: {
+    postId: "REPLACE_WITH_POST_ID"
+    reactionType: "fire"
+  }) {
+    id
+    reactionType
+    createdAt
+    author {
+      id
+      username
+    }
+  }
+}
+
+mutation TestDeleteReaction {
+  deleteReaction(postId: "REPLACE_WITH_POST_ID")
+}

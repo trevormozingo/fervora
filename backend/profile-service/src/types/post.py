@@ -4,6 +4,7 @@ import strawberry
 from strawberry.types import Info
 from .profile import Profile
 from .comment import Comment
+from .reaction import Reaction, ReactionSummary
 
 
 VALID_ACTIVITY_TYPES = {
@@ -101,6 +102,54 @@ class Post:
                 raise ValueError("invalid cursor")
         docs = await db.comments.find(query).sort("_id", 1).limit(limit).to_list(length=limit)
         return [_comment_from_doc({**d, "_id": str(d["_id"])}) for d in docs]
+
+    @strawberry.field
+    async def viewer_reaction(self, info: Info) -> Optional[str]:
+        """Returns the reaction type the current user left, or None."""
+        user_id = info.context["user_id"]
+        if not user_id:
+            return None
+        db = info.context["db"]
+        doc = await db.reactions.find_one(
+            {"postId": str(self.id), "authorUid": user_id, "isDeleted": {"$ne": True}},
+            {"reactionType": 1},
+        )
+        return doc["reactionType"] if doc else None
+
+    @strawberry.field
+    async def reaction_summaries(self, info: Info) -> list[ReactionSummary]:
+        """Grouped reaction counts for UI badges (e.g. [{reactionType: 'fire', count: 3}])."""
+        db = info.context["db"]
+        pipeline = [
+            {"$match": {"postId": str(self.id), "isDeleted": {"$ne": True}}},
+            {"$group": {"_id": "$reactionType", "count": {"$sum": 1}}},
+        ]
+        docs = await db.reactions.aggregate(pipeline).to_list(length=None)
+        return [ReactionSummary(reaction_type=d["_id"], count=d["count"]) for d in docs]
+
+    @strawberry.field
+    async def reactions(
+        self,
+        info: Info,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+        reaction_type: Optional[str] = None,
+    ) -> list[Reaction]:
+        """Paginated list of reactions, optionally filtered by type for the dropdown."""
+        from ..resolvers.reactions import _reaction_from_doc
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        db = info.context["db"]
+        query: dict = {"postId": str(self.id), "isDeleted": {"$ne": True}}
+        if reaction_type:
+            query["reactionType"] = reaction_type
+        if cursor:
+            try:
+                query["_id"] = {"$gt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+        docs = await db.reactions.find(query).sort("_id", 1).limit(limit).to_list(length=limit)
+        return [_reaction_from_doc({**d, "_id": str(d["_id"])}) for d in docs]
 
 
 # ── Input types ───────────────────────────────────────────────────────────────

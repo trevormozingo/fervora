@@ -16,3 +16,9 @@ async def init_db(db) -> None:
     await comments.create_index([("postId", ASCENDING)])
     await comments.create_index([("authorUid", ASCENDING)])
     await comments.create_index([("isDeleted", ASCENDING)])
+
+    reactions = db.reactions
+    await reactions.create_index([("postId", ASCENDING)])
+    await reactions.create_index([("authorUid", ASCENDING)])
+    await reactions.create_index([("postId", ASCENDING), ("authorUid", ASCENDING)], unique=True)
+    await reactions.create_index([("isDeleted", ASCENDING)])
