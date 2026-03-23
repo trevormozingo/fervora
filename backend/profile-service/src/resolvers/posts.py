@@ -6,8 +6,7 @@ import strawberry
 from strawberry.types import Info
 
 from ..types.post import Post, MediaItem, Workout, BodyMetrics, CreatePostInput
-from ..cache import get_cached, set_cached, invalidate, _post_key
-
+from ..cache import cached_or_fetch, set_cached, _post_key, TTL
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,40 +63,15 @@ class PostQuery:
         """Get a single post by ID."""
         db = info.context["db"]
         redis = info.context["redis"]
+        post_id = str(id)
         try:
-            oid = ObjectId(str(id))
+            oid = ObjectId(post_id)
         except InvalidId:
             raise ValueError("invalid post id")
-        key = _post_key(str(id))
-        doc = await get_cached(redis, key)
-        if not doc:
-            doc = await db.posts.find_one({"_id": oid})
-            if not doc:
-                raise ValueError("post not found")
-            doc["_id"] = str(doc["_id"])
-            await set_cached(redis, key, doc)
+        doc = await cached_or_fetch(_post_key(post_id), db.posts, oid, redis)
+        if doc is None:
+            raise ValueError("post not found")
         return _post_from_doc(doc)
-
-    @strawberry.field
-    async def user_posts(
-        self,
-        info: Info,
-        user_id: strawberry.ID,
-        limit: int = 20,
-        cursor: Optional[str] = None,
-    ) -> list[Post]:
-        """Get posts by a user, newest first, with cursor-based pagination."""
-        db = info.context["db"]
-        query: dict = {"authorUid": str(user_id)}
-        if cursor:
-            try:
-                query["_id"] = {"$lt": ObjectId(cursor)}
-            except InvalidId:
-                raise ValueError("invalid cursor")
-        db_cursor = db.posts.find(query).sort("_id", -1).limit(limit)
-        docs = await db_cursor.to_list(length=limit)
-        return [_post_from_doc({**d, "_id": str(d["_id"])}) for d in docs]
-
 
 
 # ── Mutation ──────────────────────────────────────────────────────────────────
@@ -123,6 +97,7 @@ class PostMutation:
             "healthKitId": input.health_kit_id,
             "storagePostId": input.storage_post_id,
             "createdAt": datetime.now(timezone.utc).isoformat(),
+            "isDeleted": False,
         }
 
         if input.media:
@@ -168,10 +143,18 @@ class PostMutation:
         redis = info.context["redis"]
         user_id = info.context["user_id"]
 
-        result = await db.posts.delete_one({"_id": ObjectId(str(id)), "authorUid": user_id})
+        try:
+            oid = ObjectId(str(id))
+        except InvalidId:
+            raise ValueError("invalid post id")
 
-        if result.deleted_count > 0:
-            await invalidate(redis, _post_key(str(id)))
+        result = await db.posts.update_one(
+            {"_id": oid, "authorUid": user_id},
+            {"$set": {"isDeleted": True}},
+        )
+
+        if result.modified_count > 0:
+            await redis.setex(_post_key(str(id)), TTL, "__nil__")
             return True
 
         return False

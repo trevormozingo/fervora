@@ -4,7 +4,7 @@ import strawberry
 from strawberry.types import Info
 
 from ..types.profile import Profile, Location, CreateProfileInput, UpdateProfileInput
-from ..cache import get_cached, set_cached, invalidate, _profile_key
+from ..cache import cached_or_fetch, set_cached, _profile_key, TTL
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -28,17 +28,6 @@ def _profile_from_doc(doc: dict) -> Profile:
     )
 
 
-async def _get_cached_or_fetch(user_id: str, db, redis) -> dict | None:
-    key = _profile_key(user_id)
-    doc = await get_cached(redis, key)
-    if doc:
-        return doc
-    doc = await db.profiles.find_one({"_id": user_id, "isDeleted": False})
-    if doc:
-        await set_cached(redis, key, doc)
-    return doc
-
-
 # ── Query ─────────────────────────────────────────────────────────────────────
 
 @strawberry.type
@@ -50,7 +39,7 @@ class ProfileQuery:
         db = info.context["db"]
         redis = info.context["redis"]
         user_id = info.context["user_id"]
-        doc = await _get_cached_or_fetch(user_id, db, redis)
+        doc = await cached_or_fetch(_profile_key(user_id), db.profiles, user_id, redis)
         if doc is None:
             raise ValueError("profile not found")
         return _profile_from_doc(doc)
@@ -60,7 +49,7 @@ class ProfileQuery:
         """Get any user's profile by ID."""
         db = info.context["db"]
         redis = info.context["redis"]
-        doc = await _get_cached_or_fetch(str(id), db, redis)
+        doc = await cached_or_fetch(_profile_key(str(id)), db.profiles, str(id), redis)
         if doc is None:
             raise ValueError("profile not found")
         return _profile_from_doc(doc)
@@ -159,7 +148,7 @@ class ProfileMutation:
         )
 
         if result.modified_count > 0:
-            await invalidate(redis, _profile_key(user_id))
+            await redis.setex(_profile_key(user_id), TTL, "__nil__")
             return True
 
         return False
