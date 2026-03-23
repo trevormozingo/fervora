@@ -1,11 +1,9 @@
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 import strawberry
 from strawberry.types import Info
 from .profile import Profile
-
-if TYPE_CHECKING:
-    from .comment import Comment
+from .comment import Comment
 
 
 VALID_ACTIVITY_TYPES = {
