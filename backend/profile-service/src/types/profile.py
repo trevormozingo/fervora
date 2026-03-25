@@ -1,8 +1,12 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Annotated, Optional, TYPE_CHECKING
 from datetime import date
 import re
 import strawberry
+from strawberry.types import Info
+
+if TYPE_CHECKING:
+    from .post import Post
 
 # ── Scalars ───────────────────────────────────────────────────────────
 
@@ -120,10 +124,10 @@ class Profile:
     @strawberry.field
     async def posts(
         self,
-        info,
+        info: Info,
         limit: int = 20,
         cursor: Optional[str] = None,
-    ):
+    ) -> list[Annotated["Post", strawberry.lazy(".post")]]:
         from bson import ObjectId
         from bson.errors import InvalidId
         db = info.context["db"]

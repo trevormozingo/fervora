@@ -235,3 +235,41 @@ query TestProfilePostsPaginated {
     }
   }
 }
+
+query TestProfilePostsWithEngagement {
+  profile(id: "REPLACE_WITH_USER_ID") {
+    id
+    username
+    displayName
+    posts(limit: 10) {
+      id
+      title
+      body
+      createdAt
+      viewerReaction
+      reactionSummaries {
+        reactionType
+        count
+      }
+      reactions(limit: 20) {
+        id
+        reactionType
+        author {
+          id
+          username
+          displayName
+        }
+      }
+      comments(limit: 10) {
+        id
+        body
+        createdAt
+        author {
+          id
+          username
+          displayName
+        }
+      }
+    }
+  }
+}
