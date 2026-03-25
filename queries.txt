@@ -190,3 +190,48 @@ mutation TestSetReaction {
 mutation TestDeleteReaction {
   deleteReaction(postId: "REPLACE_WITH_POST_ID")
 }
+
+query TestSingleReaction {
+  reaction(id: "REPLACE_WITH_REACTION_ID") {
+    id
+    reactionType
+    postId
+    createdAt
+    author {
+      id
+      username
+      displayName
+    }
+  }
+}
+
+# ── Profile Posts ─────────────────────────────────────────────────────────────
+
+query TestProfilePosts {
+  profile(id: "REPLACE_WITH_USER_ID") {
+    id
+    username
+    displayName
+    posts(limit: 10) {
+      id
+      title
+      body
+      createdAt
+      workout {
+        activityType
+        durationSeconds
+        distanceMiles
+      }
+    }
+  }
+}
+
+query TestProfilePostsPaginated {
+  profile(id: "REPLACE_WITH_USER_ID") {
+    posts(limit: 5, cursor: "REPLACE_WITH_LAST_POST_ID") {
+      id
+      title
+      createdAt
+    }
+  }
+}

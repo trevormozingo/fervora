@@ -117,6 +117,30 @@ class Profile:
     interests: Optional[list[str]]
     fitness_level: Optional[str]
 
+    @strawberry.field
+    async def posts(
+        self,
+        info,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ):
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        db = info.context["db"]
+        post_loader = info.context["post_loader"]
+        query: dict = {"authorUid": str(self.id), "isDeleted": {"$ne": True}}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+        docs = await db.posts.find(query, {"_id": 1}).sort("_id", -1).limit(limit).to_list(length=limit)
+        if not docs:
+            return []
+        post_ids = [str(doc["_id"]) for doc in docs]
+        hydrated = await post_loader.load_many(post_ids)
+        return [p for p in hydrated if p is not None]
+
 @strawberry.input
 class CreateProfileInput:
     username: Username

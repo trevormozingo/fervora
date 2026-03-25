@@ -12,7 +12,7 @@ from .resolvers.profiles import ProfileQuery, ProfileMutation
 from .resolvers.posts import PostQuery, PostMutation
 from .resolvers.comments import CommentQuery, CommentMutation
 from .resolvers.reactions import ReactionQuery, ReactionMutation
-from .loaders import make_profile_loader
+from .loaders import make_profile_loader, make_post_loader
 
 _mongo_client: AsyncIOMotorClient | None = None
 _redis: Redis | None = None
@@ -39,6 +39,7 @@ def get_context(request: Request):
         "db": db,
         "redis": _redis,
         "profile_loader": make_profile_loader(db, _redis),
+        "post_loader": make_post_loader(db, _redis),
     }
 
 
