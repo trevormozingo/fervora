@@ -273,3 +273,86 @@ query TestProfilePostsWithEngagement {
     }
   }
 }
+
+# ── Events ────────────────────────────────────────────────────────────────────
+
+mutation TestCreateEvent {
+  createEvent(input: {
+    title: "Saturday Morning Run"
+    description: "5k easy pace around the park. All levels welcome!"
+    location: "Central Park, New York"
+    startsAt: "2026-04-05T09:00:00Z"
+    endsAt: "2026-04-05T10:30:00Z"
+    invitedUserIds: ["REPLACE_WITH_USER_ID_1", "REPLACE_WITH_USER_ID_2"]
+  }) {
+    id
+    title
+    description
+    location
+    startsAt
+    endsAt
+    createdAt
+    organizer {
+      id
+      username
+      displayName
+    }
+  }
+}
+
+query TestSingleEvent {
+  event(id: "REPLACE_WITH_EVENT_ID") {
+    id
+    title
+    description
+    location
+    startsAt
+    endsAt
+    createdAt
+    organizer {
+      id
+      username
+      displayName
+    }
+    viewerRsvp
+    rsvpSummaries {
+      status
+      count
+    }
+    rsvps(limit: 50) {
+      id
+      status
+      user {
+        id
+        username
+        displayName
+      }
+    }
+  }
+}
+
+query TestEventGoingList {
+  event(id: "REPLACE_WITH_EVENT_ID") {
+    id
+    title
+    rsvps(limit: 50, status: "going") {
+      status
+      user {
+        id
+        username
+        displayName
+      }
+    }
+  }
+}
+
+mutation TestRsvpEvent {
+  rsvpEvent(input: {
+    eventId: "REPLACE_WITH_EVENT_ID"
+    status: "going"
+  })
+}
+
+mutation TestDeleteEvent {
+  deleteEvent(id: "REPLACE_WITH_EVENT_ID")
+}

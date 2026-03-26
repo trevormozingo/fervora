@@ -12,6 +12,7 @@ from .resolvers.profiles import ProfileQuery, ProfileMutation
 from .resolvers.posts import PostQuery, PostMutation
 from .resolvers.comments import CommentQuery, CommentMutation
 from .resolvers.reactions import ReactionQuery, ReactionMutation
+from .resolvers.events import EventQuery, EventMutation
 from .loaders import make_profile_loader, make_post_loader
 
 _mongo_client: AsyncIOMotorClient | None = None
@@ -43,8 +44,8 @@ def get_context(request: Request):
     }
 
 
-Query = merge_types("Query", (ProfileQuery, PostQuery, CommentQuery, ReactionQuery))
-Mutation = merge_types("Mutation", (ProfileMutation, PostMutation, CommentMutation, ReactionMutation))
+Query = merge_types("Query", (ProfileQuery, PostQuery, CommentQuery, ReactionQuery, EventQuery))
+Mutation = merge_types("Mutation", (ProfileMutation, PostMutation, CommentMutation, ReactionMutation, EventMutation))
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
 graphql_app = GraphQLRouter(schema, context_getter=get_context)

@@ -54,6 +54,17 @@ class ReactionMutation:
         redis = info.context["redis"]
         user_id = info.context["user_id"]
 
+        try:
+            post_oid = ObjectId(str(input.post_id))
+        except InvalidId:
+            raise ValueError("invalid post id")
+
+        if not await db.posts.find_one({"_id": post_oid, "isDeleted": {"$ne": True}}, {"_id": 1}):
+            raise ValueError("cannot react: the post does not exist or was deleted")
+
+        if not await db.profiles.find_one({"_id": user_id, "isDeleted": {"$ne": True}}, {"_id": 1}):
+            raise ValueError("cannot react: your profile does not exist or was deleted")
+
         now = datetime.now(timezone.utc).isoformat()
         doc = await db.reactions.find_one_and_update(
             {"postId": str(input.post_id), "authorUid": user_id},

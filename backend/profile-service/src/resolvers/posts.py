@@ -86,6 +86,15 @@ class PostMutation:
         redis = info.context["redis"]
         user_id = info.context["user_id"]
 
+        if not await db.profiles.find_one({"_id": user_id, "isDeleted": {"$ne": True}}, {"_id": 1}):
+            raise ValueError("cannot publish post: profile does not exist or was deleted")
+
+        if input.storage_post_id:
+            existing = await db.posts.find_one({"authorUid": user_id, "storagePostId": input.storage_post_id})
+            if existing:
+                existing["_id"] = str(existing["_id"])
+                return _post_from_doc(existing)
+
         # At least one content field must be present
         if not any([input.title, input.body, input.media, input.workout, input.body_metrics]):
             raise ValueError("post must contain at least one content field")
@@ -97,7 +106,6 @@ class PostMutation:
             "healthKitId": input.health_kit_id,
             "storagePostId": input.storage_post_id,
             "createdAt": datetime.now(timezone.utc).isoformat(),
-            "isDeleted": False,
             "isDeleted": False
         }
 

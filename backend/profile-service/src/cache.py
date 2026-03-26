@@ -21,6 +21,10 @@ def _reaction_key(reaction_id: str) -> str:
     return f"reaction:{reaction_id}"
 
 
+def _event_key(event_id: str) -> str:
+    return f"event:{event_id}"
+
+
 async def get_cached(redis: Redis, key: str):
     raw = await redis.get(key)
     if raw is None:

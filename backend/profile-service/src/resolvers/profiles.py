@@ -67,6 +67,12 @@ class ProfileMutation:
         redis = info.context["redis"]
         user_id = info.context["user_id"]
 
+        if await db.profiles.find_one({"_id": user_id}):
+            raise ValueError("a profile already exists for this user")
+
+        if await db.profiles.find_one({"username": {"$regex": f"^{input.username}$", "$options": "i"}}):
+            raise ValueError("that username is already taken")
+
         doc = {
             "_id": user_id,
             "username": input.username,
