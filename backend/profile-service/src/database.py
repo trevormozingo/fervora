@@ -3,8 +3,12 @@ from pymongo import ASCENDING, GEOSPHERE
 
 async def init_db(db) -> None:
     profiles = db.profiles
-    await profiles.create_index([("username", ASCENDING)], unique=True)
-    await profiles.create_index([("username", ASCENDING)], unique=True, collation={"locale": "en", "strength": 2})
+    await profiles.create_index(
+        [("username", ASCENDING)],
+        unique=True,
+        name="username_ci",
+        collation={"locale": "en", "strength": 2},
+    )
     await profiles.create_index([("isDeleted", ASCENDING)])
     await profiles.create_index([("location", GEOSPHERE)], sparse=True)
 
@@ -35,3 +39,16 @@ async def init_db(db) -> None:
     await rsvps.create_index([("userId", ASCENDING)])
     await rsvps.create_index([("eventId", ASCENDING), ("userId", ASCENDING)], unique=True)
     await rsvps.create_index([("isDeleted", ASCENDING)])
+
+    follows = db.follows
+    await follows.create_index([("followerUid", ASCENDING)])
+    await follows.create_index([("followingUid", ASCENDING)])
+    await follows.create_index([("followerUid", ASCENDING), ("followingUid", ASCENDING)], unique=True)
+    await follows.create_index([("isDeleted", ASCENDING)])
+
+    feed = db.feed
+    await feed.create_index([("followerUid", ASCENDING)])
+    await feed.create_index([("postId", ASCENDING)])
+    await feed.create_index([("authorUid", ASCENDING)])
+    await feed.create_index([("followerUid", ASCENDING), ("postId", ASCENDING)], unique=True)
+    await feed.create_index([("isDeleted", ASCENDING)])

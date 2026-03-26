@@ -68,6 +68,53 @@ services:
       redis:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  event-listener:
+    build:
+      context: event-listener-service
+      dockerfile: Dockerfile
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
+      MONGO_DB: fervora
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-worker:
+    build:
+      context: event-worker-service
+      dockerfile: Dockerfile
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
+      MONGO_DB: fervora
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   test-client:
     build:
       context: .
