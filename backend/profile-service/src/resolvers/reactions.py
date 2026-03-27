@@ -52,7 +52,9 @@ class ReactionMutation:
         """Set (or replace) the current user's reaction on a post."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         try:
             post_oid = ObjectId(str(input.post_id))
@@ -83,7 +85,9 @@ class ReactionMutation:
         """Remove the current user's reaction from a post."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         doc = await db.reactions.find_one_and_update(
             {"postId": str(post_id), "authorUid": user_id, "isDeleted": {"$ne": True}},

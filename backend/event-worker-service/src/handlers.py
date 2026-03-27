@@ -1,7 +1,10 @@
 import logging
 from datetime import datetime, timezone
 
+from bson import ObjectId
 from pymongo.errors import BulkWriteError
+
+from .storage import delete_storage_url
 
 logger = logging.getLogger(__name__)
 
@@ -13,23 +16,16 @@ def _now() -> datetime:
 
 
 async def handle_post_created(data: dict, db, redis) -> None:
-    """
-    Fan-out a new post to the feed of every follower of the author.
-    Inserts one document per follower into the `feed` collection
-    AND updates the user's feed in Redis (ZSET).
-    """
     post_id = data["postId"]
     author_uid = data["authorUid"]
     created_at = _now()
-    timestamp = created_at.timestamp()
 
-    # 1. Verify Post Exists & Isn't Deleted
-    post = await db.posts.find_one({"_id": post_id, "isDeleted": {"$ne": True}}, {"_id": 1})
+    # Verify the post exists and isn't deleted before fanning out.
+    post = await db.posts.find_one({"_id": ObjectId(post_id), "isDeleted": {"$ne": True}}, {"_id": 1})
     if not post:
         logger.warning("post.created  post not found or already deleted  postId=%s", post_id)
         return
 
-    # 2. Find All Followers
     follower_ids = []
     async for doc in db.follows.find(
         {"followingUid": author_uid, "isDeleted": {"$ne": True}},
@@ -37,80 +33,52 @@ async def handle_post_created(data: dict, db, redis) -> None:
     ):
         follower_ids.append(doc["followerUid"])
 
-    if not follower_ids:
+    if follower_ids:
+        docs = [
+            {
+                "followerUid": fid,
+                "postId": post_id,
+                "authorUid": author_uid,
+                "createdAt": created_at,
+            }
+            for fid in follower_ids
+        ]
+        try:
+            await db.feed.insert_many(docs, ordered=False)
+        except BulkWriteError as exc:
+            if any(e.get("code") != 11000 for e in exc.details.get("writeErrors", [])):
+                raise
+    else:
         logger.debug("post.created  no followers  authorUid=%s", author_uid)
-        return
-
-    # 3. Fan-out to MongoDB `feed` collection
-    docs = [
-        {
-            "followerUid": fid,
-            "postId": post_id,
-            "authorUid": author_uid,
-            "createdAt": created_at,
-        }
-        for fid in follower_ids
-    ]
-
-    try:
-        await db.feed.insert_many(docs, ordered=False)
-    except BulkWriteError as exc:
-        # Duplicate key (E11000) means the entry already exists — safe to ignore.
-        if any(e.get("code") != 11000 for e in exc.details.get("writeErrors", [])):
-            raise
-
-    # 4. Fan-out to Redis Caches
-    # Key: feed:{uid}  Score: timestamp  Member: postId
-    # expire() resets the TTL each time a new post arrives, keeping active feeds warm.
-    try:
-        async with redis.pipeline() as pipe:
-            for fid in follower_ids:
-                key = f"feed:{fid}"
-                pipe.zadd(key, {post_id: timestamp})
-                pipe.expire(key, TTL)
-            await pipe.execute()
-    except Exception as exc:
-        logger.error("post.created  redis fan-out failed  error=%s", exc)
-        # We don't raise here because the persistent store (Mongo) succeeded.
-        # Redis is just a cache.
 
     logger.info(
-        "post.created  fanned out postId=%s to %d followers of authorUid=%s",
-        post_id, len(follower_ids), author_uid,
+        "post.created  fanned out postId=%s to %d followers",
+        post_id, len(follower_ids),
     )
 
 
 async def handle_post_deleted(data: dict, db, redis) -> None:
-    """
-    Soft-delete all feed entries, comments, and reactions referencing the deleted post.
-    Also tombstones individual document caches and removes the post from feed ZSETs.
-    """
     post_id = data["postId"]
     soft_delete = {"$set": {"isDeleted": True}}
 
-    # 1. Collect IDs for cache cleanup before the mongo updates.
-    comment_ids, reaction_ids, follower_ids = [], [], []
+    # Collect IDs before updating so we can tombstone their cache entries.
+    comment_ids, reaction_ids = [], []
     async for doc in db.comments.find({"postId": post_id}, {"_id": 1}):
         comment_ids.append(str(doc["_id"]))
     async for doc in db.reactions.find({"postId": post_id}, {"_id": 1}):
         reaction_ids.append(str(doc["_id"]))
-    async for doc in db.feed.find({"postId": post_id}, {"followerUid": 1}):
-        follower_ids.append(doc["followerUid"])
 
-    # 2. Soft-delete in MongoDB.
     r_feed = await db.feed.update_many({"postId": post_id}, soft_delete)
     r_comments = await db.comments.update_many({"postId": post_id}, soft_delete)
     r_reactions = await db.reactions.update_many({"postId": post_id}, soft_delete)
 
-    # 3. Update Redis: tombstone individual doc caches, remove from feed ZSETs.
     try:
         async with redis.pipeline() as pipe:
+            pipe.setex(f"post:{post_id}", TTL, "__nil__")
             for cid in comment_ids:
                 pipe.setex(f"comment:{cid}", TTL, "__nil__")
             for rid in reaction_ids:
                 pipe.setex(f"reaction:{rid}", TTL, "__nil__")
-            for fid in follower_ids:
-                pipe.zrem(f"feed:{fid}", post_id)
             await pipe.execute()
     except Exception as exc:
         logger.error("post.deleted  redis cleanup failed  error=%s", exc)
@@ -120,16 +88,134 @@ async def handle_post_deleted(data: dict, db, redis) -> None:
         r_feed.modified_count, r_comments.modified_count, r_reactions.modified_count, post_id,
     )
 
+    # Delete any Firebase Storage blobs attached to this post.
+    post_doc = await db.posts.find_one({"_id": ObjectId(post_id)}, {"media": 1})
+    if post_doc and post_doc.get("media"):
+        for item in post_doc["media"]:
+            if item.get("url"):
+                await delete_storage_url(item["url"])
 
-# --- Stubs for other handlers to satisfy main.py imports ---
 
 async def handle_profile_deleted(data: dict, db, redis) -> None:
-    pass
+    user_id = data["userId"]
+    soft_delete = {"$set": {"isDeleted": True}}
+
+    post_ids = []
+    async for doc in db.posts.find({"authorUid": user_id}, {"_id": 1}):
+        post_ids.append(str(doc["_id"]))
+
+    comment_ids, reaction_ids = [], []
+    if post_ids:
+        async for doc in db.comments.find({"postId": {"$in": post_ids}}, {"_id": 1}):
+            comment_ids.append(str(doc["_id"]))
+        async for doc in db.reactions.find({"postId": {"$in": post_ids}}, {"_id": 1}):
+            reaction_ids.append(str(doc["_id"]))
+
+    async for doc in db.comments.find({"authorUid": user_id}, {"_id": 1}):
+        cid = str(doc["_id"])
+        if cid not in comment_ids:
+            comment_ids.append(cid)
+    async for doc in db.reactions.find({"authorUid": user_id}, {"_id": 1}):
+        rid = str(doc["_id"])
+        if rid not in reaction_ids:
+            reaction_ids.append(rid)
+
+    r_posts     = await db.posts.update_many({"authorUid": user_id}, soft_delete)
+    r_comments  = await db.comments.update_many(
+        {"$or": [{"authorUid": user_id}, {"postId": {"$in": post_ids}}]}, soft_delete
+    )
+    r_reactions = await db.reactions.update_many(
+        {"$or": [{"authorUid": user_id}, {"postId": {"$in": post_ids}}]}, soft_delete
+    )
+    r_events    = await db.events.update_many({"organizerUid": user_id}, soft_delete)
+    r_rsvps     = await db.rsvps.update_many({"userId": user_id}, soft_delete)
+    r_follows   = await db.follows.update_many(
+        {"$or": [{"followerUid": user_id}, {"followingUid": user_id}]}, soft_delete
+    )
+    r_feed      = await db.feed.update_many(
+        {"$or": [{"authorUid": user_id}, {"followerUid": user_id}]}, soft_delete
+    )
+
+    try:
+        async with redis.pipeline() as pipe:
+            pipe.setex(f"profile:{user_id}", TTL, "__nil__")
+            for pid in post_ids:
+                pipe.setex(f"post:{pid}", TTL, "__nil__")
+            for cid in comment_ids:
+                pipe.setex(f"comment:{cid}", TTL, "__nil__")
+            for rid in reaction_ids:
+                pipe.setex(f"reaction:{rid}", TTL, "__nil__")
+            await pipe.execute()
+    except Exception as exc:
+        logger.error("profile.deleted  redis cleanup failed  error=%s", exc)
+
+    logger.info(
+        "profile.deleted  userId=%s  posts=%d comments=%d reactions=%d "
+        "events=%d rsvps=%d follows=%d feed=%d",
+        user_id,
+        r_posts.modified_count, r_comments.modified_count, r_reactions.modified_count,
+        r_events.modified_count, r_rsvps.modified_count, r_follows.modified_count,
+        r_feed.modified_count,
+    )
+
+    # Delete the profile photo from Firebase Storage.
+    profile_doc = await db.profiles.find_one({"_id": user_id}, {"profilePhoto": 1})
+    if profile_doc and profile_doc.get("profilePhoto"):
+        await delete_storage_url(profile_doc["profilePhoto"])
 
 async def handle_follow_created(data: dict, db, redis) -> None:
-    pass
+    BACKFILL_LIMIT = 50
+
+    follower_uid = data["followerUid"]
+    following_uid = data["followingUid"]
+
+    posts = await db.posts.find(
+        {"authorUid": following_uid, "isDeleted": {"$ne": True}},
+        {"_id": 1, "createdAt": 1},
+    ).sort("createdAt", -1).limit(BACKFILL_LIMIT).to_list(BACKFILL_LIMIT)
+
+    if not posts:
+        logger.debug("follow.created  no posts to backfill  followingUid=%s", following_uid)
+        return
+
+    docs = [
+        {
+            "followerUid": follower_uid,
+            "postId": str(post["_id"]),
+            "authorUid": following_uid,
+            "createdAt": post["createdAt"],
+        }
+        for post in posts
+    ]
+
+    try:
+        await db.feed.insert_many(docs, ordered=False)
+    except BulkWriteError as exc:
+        if any(e.get("code") != 11000 for e in exc.details.get("writeErrors", [])):
+            raise
+
+    logger.info(
+        "follow.created  backfilled %d posts for followerUid=%s from followingUid=%s",
+        len(posts), follower_uid, following_uid,
+    )
 
 async def handle_follow_deleted(data: dict, db, redis) -> None:
-    pass
+    follower_uid = data.get("followerUid")
+    following_uid = data.get("followingUid")
+
+    if not follower_uid or not following_uid:
+        # Hard-delete only carries a followId with no UIDs — nothing we can do.
+        logger.warning("follow.deleted  missing UIDs, cannot purge feed  data=%s", data)
+        return
+
+    r = await db.feed.update_many(
+        {"followerUid": follower_uid, "authorUid": following_uid},
+        {"$set": {"isDeleted": True}},
+    )
+
+    logger.info(
+        "follow.deleted  purged %d feed entries for followerUid=%s from followingUid=%s",
+        r.modified_count, follower_uid, following_uid,
+    )
 
 

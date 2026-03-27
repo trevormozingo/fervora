@@ -1,4 +1,4 @@
-from pymongo import ASCENDING, GEOSPHERE
+from pymongo import ASCENDING, DESCENDING, GEOSPHERE
 
 
 async def init_db(db) -> None:
@@ -47,7 +47,7 @@ async def init_db(db) -> None:
     await follows.create_index([("isDeleted", ASCENDING)])
 
     feed = db.feed
-    await feed.create_index([("followerUid", ASCENDING)])
+    await feed.create_index([("followerUid", ASCENDING), ("isDeleted", ASCENDING), ("_id", DESCENDING)])
     await feed.create_index([("postId", ASCENDING)])
     await feed.create_index([("authorUid", ASCENDING)])
     await feed.create_index([("followerUid", ASCENDING), ("postId", ASCENDING)], unique=True)

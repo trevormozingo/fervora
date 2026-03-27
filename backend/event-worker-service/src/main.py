@@ -21,6 +21,8 @@ import os
 import aio_pika
 import redis.asyncio as redis
 from motor.motor_asyncio import AsyncIOMotorClient
+import firebase_admin
+from firebase_admin import credentials
 
 from .handlers import (
     handle_profile_deleted,
@@ -85,6 +87,14 @@ async def consume_queue(channel: aio_pika.Channel, queue_name: str, handler, db,
 
 
 async def main() -> None:
+    # Initialise Firebase Admin SDK (needed for Storage blob deletion).
+    if not firebase_admin._apps:
+        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if cred_path:
+            firebase_admin.initialize_app(credentials.Certificate(cred_path))
+        else:
+            firebase_admin.initialize_app()
+
     logger.info("connecting to MongoDB ...")
     mongo = AsyncIOMotorClient(MONGO_URI)
     db = mongo[MONGO_DB]

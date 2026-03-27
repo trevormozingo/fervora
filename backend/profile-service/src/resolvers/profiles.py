@@ -1,10 +1,13 @@
+import os
 from datetime import datetime, timezone, date
 from pymongo import ReturnDocument
 import strawberry
 from strawberry.types import Info
+from strawberry.file_uploads import Upload
 
 from ..types.profile import Profile, Location, CreateProfileInput, UpdateProfileInput
 from ..cache import cached_or_fetch, set_cached, _profile_key, TTL
+from ..storage import upload_image
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,7 +41,9 @@ class ProfileQuery:
         """Get the authenticated user's own profile."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
         doc = await cached_or_fetch(_profile_key(user_id), db.profiles, user_id, redis)
         if doc is None:
             raise ValueError("profile not found")
@@ -65,7 +70,9 @@ class ProfileMutation:
         """Create a profile for the authenticated user and cache it."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         if await db.profiles.find_one({"_id": user_id}):
             raise ValueError("a profile already exists for this user")
@@ -103,7 +110,9 @@ class ProfileMutation:
         """Update the authenticated user's profile and refresh the cache."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         patch = {}
 
@@ -146,7 +155,9 @@ class ProfileMutation:
         """Soft-delete the authenticated user's profile and purge the cache."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         result = await db.profiles.update_one(
             {"_id": user_id},
@@ -158,3 +169,29 @@ class ProfileMutation:
             return True
 
         return False
+
+    @strawberry.mutation
+    async def upload_profile_photo(self, info: Info, file: Upload) -> Profile:
+        """Upload an image to Firebase Storage and update the user's profile photo."""
+        db = info.context["db"]
+        redis = info.context["redis"]
+        user_id = info.context.get("user_id")
+
+        if not user_id:
+            raise ValueError("authentication required")
+
+        public_url = await upload_image(file, f"profiles/{user_id}")
+
+        # Update the profile and cache
+        updated_doc = await db.profiles.find_one_and_update(
+            {"_id": user_id, "isDeleted": {"$ne": True}},
+            {"$set": {"profilePhoto": public_url}},
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if not updated_doc:
+            raise ValueError("profile not found or deleted")
+
+        await set_cached(redis, _profile_key(user_id), updated_doc)
+
+        return _profile_from_doc(updated_doc)

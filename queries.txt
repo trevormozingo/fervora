@@ -98,14 +98,17 @@ query TestPostComments {
     id
     title
     comments(limit: 10) {
-      id
-      body
-      createdAt
-      author {
+      comments {
         id
-        username
-        displayName
+        body
+        createdAt
+        author {
+          id
+          username
+          displayName
+        }
       }
+      nextCursor
     }
   }
 }
@@ -114,12 +117,15 @@ query TestPostCommentsPaginated {
   post(id: "69c0a094194685fe1770c4b2") {
     id
     comments(limit: 5, cursor: "REPLACE_WITH_LAST_COMMENT_ID") {
-      id
-      body
-      createdAt
-      author {
-        username
+      comments {
+        id
+        body
+        createdAt
+        author {
+          username
+        }
       }
+      nextCursor
     }
   }
 }
@@ -161,13 +167,16 @@ query TestReactionSummaries {
 query TestReactionDropdown {
   post(id: "REPLACE_WITH_POST_ID") {
     reactions(limit: 20, reactionType: "fire") {
-      id
-      reactionType
-      author {
+      reactions {
         id
-        username
-        displayName
+        reactionType
+        author {
+          id
+          username
+          displayName
+        }
       }
+      nextCursor
     }
   }
 }
@@ -212,16 +221,20 @@ query TestProfilePosts {
     id
     username
     displayName
+    viewerIsFollowing
     posts(limit: 10) {
-      id
-      title
-      body
-      createdAt
-      workout {
-        activityType
-        durationSeconds
-        distanceMiles
+      posts {
+        id
+        title
+        body
+        createdAt
+        workout {
+          activityType
+          durationSeconds
+          distanceMiles
+        }
       }
+      nextCursor
     }
   }
 }
@@ -229,9 +242,12 @@ query TestProfilePosts {
 query TestProfilePostsPaginated {
   profile(id: "REPLACE_WITH_USER_ID") {
     posts(limit: 5, cursor: "REPLACE_WITH_LAST_POST_ID") {
-      id
-      title
-      createdAt
+      posts {
+        id
+        title
+        createdAt
+      }
+      nextCursor
     }
   }
 }
@@ -241,35 +257,45 @@ query TestProfilePostsWithEngagement {
     id
     username
     displayName
+    viewerIsFollowing
     posts(limit: 10) {
-      id
-      title
-      body
-      createdAt
-      viewerReaction
-      reactionSummaries {
-        reactionType
-        count
-      }
-      reactions(limit: 20) {
+      posts {
         id
-        reactionType
-        author {
-          id
-          username
-          displayName
-        }
-      }
-      comments(limit: 10) {
-        id
+        title
         body
         createdAt
-        author {
-          id
-          username
-          displayName
+        viewerReaction
+        reactionSummaries {
+          reactionType
+          count
+        }
+        reactions(limit: 20) {
+          reactions {
+            id
+            reactionType
+            author {
+              id
+              username
+              displayName
+            }
+          }
+          nextCursor
+        }
+        comments(limit: 10) {
+          comments {
+            id
+            body
+            createdAt
+            author {
+              id
+              username
+              displayName
+            }
+          }
+          nextCursor
         }
       }
+      nextCursor
     }
   }
 }
@@ -355,4 +381,88 @@ mutation TestRsvpEvent {
 
 mutation TestDeleteEvent {
   deleteEvent(id: "REPLACE_WITH_EVENT_ID")
+}
+
+# ── Feed ──────────────────────────────────────────────────────────────────────
+
+query TestFeed {
+  feed(limit: 10) {
+    posts {
+      id
+      title
+      body
+      createdAt
+      author {
+        id
+        username
+        displayName
+        profilePhoto
+      }
+      viewerReaction
+      reactionSummaries {
+        reactionType
+        count
+      }
+    }
+    nextCursor
+  }
+}
+
+query TestFeedPaginated {
+  feed(limit: 10, cursor: "REPLACE_WITH_CURSOR") {
+    posts {
+      id
+      title
+      body
+      createdAt
+      author {
+        id
+        username
+      }
+    }
+    nextCursor
+  }
+}
+
+# ── Follows ───────────────────────────────────────────────────────────────────
+
+mutation TestFollowUser {
+  followUser(userId: "REPLACE_WITH_USER_ID")
+}
+
+mutation TestUnfollowUser {
+  unfollowUser(userId: "REPLACE_WITH_USER_ID")
+}
+
+query TestProfileFollowers {
+  profile(id: "REPLACE_WITH_USER_ID") {
+    id
+    username
+    viewerIsFollowing
+    followers(limit: 10) {
+      users {
+        id
+        username
+        displayName
+        profilePhoto
+      }
+      nextCursor
+    }
+  }
+}
+
+query TestProfileFollowing {
+  profile(id: "REPLACE_WITH_USER_ID") {
+    id
+    username
+    following(limit: 10) {
+      users {
+        id
+        username
+        displayName
+        profilePhoto
+      }
+      nextCursor
+    }
+  }
 }

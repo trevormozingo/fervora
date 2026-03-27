@@ -52,7 +52,9 @@ class CommentMutation:
         """Create a comment on a post."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         try:
             post_oid = ObjectId(str(input.post_id))
@@ -84,7 +86,9 @@ class CommentMutation:
         """Delete a comment (only the author can delete their own comment)."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         try:
             oid = ObjectId(str(id))

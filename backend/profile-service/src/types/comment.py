@@ -29,6 +29,12 @@ class Comment:
         return await info.context["profile_loader"].load(self.author_uid)
 
 
+@strawberry.type
+class CommentPage:
+    comments: list[Comment]
+    next_cursor: Optional[str]
+
+
 # ── Input types ───────────────────────────────────────────────────────────────
 
 @strawberry.input

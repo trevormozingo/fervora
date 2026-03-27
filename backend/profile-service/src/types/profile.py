@@ -127,9 +127,11 @@ class Profile:
         info: Info,
         limit: int = 20,
         cursor: Optional[str] = None,
-    ) -> list[Annotated["Post", strawberry.lazy(".post")]]:
+    ) -> Annotated["PostPage", strawberry.lazy(".post")]:
         from bson import ObjectId
         from bson.errors import InvalidId
+        from .post import PostPage
+
         db = info.context["db"]
         post_loader = info.context["post_loader"]
         query: dict = {"authorUid": str(self.id), "isDeleted": {"$ne": True}}
@@ -140,10 +142,97 @@ class Profile:
                 raise ValueError("invalid cursor")
         docs = await db.posts.find(query, {"_id": 1}).sort("_id", -1).limit(limit).to_list(length=limit)
         if not docs:
-            return []
+            return PostPage(posts=[], next_cursor=None)
         post_ids = [str(doc["_id"]) for doc in docs]
         hydrated = await post_loader.load_many(post_ids)
-        return [p for p in hydrated if p is not None]
+        valid_posts = [p for p in hydrated if p is not None]
+        next_cursor = str(docs[-1]["_id"]) if len(docs) == limit else None
+        return PostPage(posts=valid_posts, next_cursor=next_cursor)
+
+    @strawberry.field
+    async def followers(
+        self,
+        info: Info,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> Annotated["FollowersPage", strawberry.lazy("..resolvers.follows")]:
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        from ..resolvers.follows import FollowersPage
+
+        db = info.context["db"]
+        profile_loader = info.context["profile_loader"]
+
+        query: dict = {"followingUid": str(self.id), "isDeleted": {"$ne": True}}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+
+        docs = (
+            await db.follows.find(query, {"followerUid": 1, "_id": 1})
+            .sort("_id", -1)
+            .limit(limit)
+            .to_list(length=limit)
+        )
+        if not docs:
+            return FollowersPage(users=[], next_cursor=None)
+
+        profile_ids = [doc["followerUid"] for doc in docs]
+        hydrated = await profile_loader.load_many(profile_ids)
+        profiles = [p for p in hydrated if p is not None]
+        next_cursor = str(docs[-1]["_id"]) if len(docs) == limit else None
+        return FollowersPage(users=profiles, next_cursor=next_cursor)
+
+    @strawberry.field
+    async def following(
+        self,
+        info: Info,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> Annotated["FollowersPage", strawberry.lazy("..resolvers.follows")]:
+        from bson import ObjectId
+        from bson.errors import InvalidId
+        from ..resolvers.follows import FollowersPage
+
+        db = info.context["db"]
+        profile_loader = info.context["profile_loader"]
+
+        query: dict = {"followerUid": str(self.id), "isDeleted": {"$ne": True}}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except InvalidId:
+                raise ValueError("invalid cursor")
+
+        docs = (
+            await db.follows.find(query, {"followingUid": 1, "_id": 1})
+            .sort("_id", -1)
+            .limit(limit)
+            .to_list(length=limit)
+        )
+        if not docs:
+            return FollowersPage(users=[], next_cursor=None)
+
+        profile_ids = [doc["followingUid"] for doc in docs]
+        hydrated = await profile_loader.load_many(profile_ids)
+        profiles = [p for p in hydrated if p is not None]
+        next_cursor = str(docs[-1]["_id"]) if len(docs) == limit else None
+        return FollowersPage(users=profiles, next_cursor=next_cursor)
+
+    @strawberry.field
+    async def viewer_is_following(self, info: Info) -> bool:
+        """Returns True if the authenticated user follows this profile."""
+        db = info.context["db"]
+        viewer_id = info.context.get("user_id")
+        if not viewer_id or viewer_id == str(self.id):
+            return False
+        doc = await db.follows.find_one(
+            {"followerUid": viewer_id, "followingUid": str(self.id), "isDeleted": {"$ne": True}},
+            {"_id": 1},
+        )
+        return doc is not None
 
 @strawberry.input
 class CreateProfileInput:

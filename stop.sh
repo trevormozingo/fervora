@@ -1,1 +1,1 @@
-docker compose -f backend/api-gateway/docker-compose.yaml down
+docker compose -f backend/docker-compose.yaml down

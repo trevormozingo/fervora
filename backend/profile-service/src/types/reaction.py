@@ -38,6 +38,12 @@ class Reaction:
         return await info.context["profile_loader"].load(self.author_uid)
 
 
+@strawberry.type
+class ReactionPage:
+    reactions: list[Reaction]
+    next_cursor: Optional[str]
+
+
 # ── Input types ───────────────────────────────────────────────────────────────
 
 @strawberry.input

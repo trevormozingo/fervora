@@ -54,6 +54,12 @@ class Rsvp:
 
 
 @strawberry.type
+class RsvpPage:
+    rsvps: list[Rsvp]
+    next_cursor: Optional[str]
+
+
+@strawberry.type
 class Event:
     id: strawberry.ID
     organizer_uid: strawberry.Private[str]
@@ -71,13 +77,8 @@ class Event:
     @strawberry.field
     async def rsvp_summaries(self, info: Info) -> list[RsvpSummary]:
         """Grouped RSVP counts for UI badges (e.g. [{status: 'going', count: 12}])."""
-        db = info.context["db"]
-        pipeline = [
-            {"$match": {"eventId": str(self.id), "isDeleted": {"$ne": True}}},
-            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-        ]
-        docs = await db.rsvps.aggregate(pipeline).to_list(length=None)
-        return [RsvpSummary(status=d["_id"], count=d["count"]) for d in docs]
+        loader = info.context["rsvp_summary_loader"]
+        return await loader.load(str(self.id))
 
     @strawberry.field
     async def rsvps(
@@ -86,7 +87,7 @@ class Event:
         limit: int = 50,
         cursor: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> list[Rsvp]:
+    ) -> "RsvpPage":
         """Paginated list of RSVPs, optionally filtered by status."""
         from bson import ObjectId
         from bson.errors import InvalidId
@@ -100,23 +101,21 @@ class Event:
             except InvalidId:
                 raise ValueError("invalid cursor")
         docs = await db.rsvps.find(query).sort("_id", 1).limit(limit).to_list(length=limit)
-        return [
+        rsvps = [
             Rsvp(id=strawberry.ID(str(d["_id"])), user_id=d["userId"], status=d["status"])
             for d in docs
         ]
+        next_cursor = str(docs[-1]["_id"]) if len(docs) == limit else None
+        return RsvpPage(rsvps=rsvps, next_cursor=next_cursor)
 
     @strawberry.field
     async def viewer_rsvp(self, info: Info) -> Optional[str]:
         """Returns the current user's RSVP status for this event, or None."""
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
         if not user_id:
             return None
-        db = info.context["db"]
-        doc = await db.rsvps.find_one(
-            {"eventId": str(self.id), "userId": user_id, "isDeleted": {"$ne": True}},
-            {"status": 1},
-        )
-        return doc["status"] if doc else None
+        loader = info.context["viewer_rsvp_loader"]
+        return await loader.load(str(self.id))
 
 
 # ── Input types ───────────────────────────────────────────────────────────────

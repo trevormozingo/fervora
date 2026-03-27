@@ -4,9 +4,12 @@ from bson import ObjectId
 from bson.errors import InvalidId
 import strawberry
 from strawberry.types import Info
+from strawberry.file_uploads import Upload
 
-from ..types.post import Post, MediaItem, Workout, BodyMetrics, CreatePostInput
+from pymongo import ReturnDocument
+from ..types.post import Post, MediaItem, Workout, BodyMetrics, CreatePostInput, UpdatePostInput
 from ..cache import cached_or_fetch, set_cached, _post_key, TTL
+from ..storage import upload_image
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,7 +87,9 @@ class PostMutation:
         """Create a new post for the authenticated user."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         if not await db.profiles.find_one({"_id": user_id, "isDeleted": {"$ne": True}}, {"_id": 1}):
             raise ValueError("cannot publish post: profile does not exist or was deleted")
@@ -146,11 +151,85 @@ class PostMutation:
         return _post_from_doc(doc)
 
     @strawberry.mutation
+    async def update_post(self, info: Info, input: UpdatePostInput) -> Post:
+        """Update an existing post (only the author can update)."""
+        db = info.context["db"]
+        redis = info.context["redis"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
+
+        try:
+            oid = ObjectId(str(input.id))
+        except InvalidId:
+            raise ValueError("invalid post id")
+
+        patch = {}
+
+        if input.title is not strawberry.UNSET:
+            patch["title"] = input.title
+        if input.body is not strawberry.UNSET:
+            patch["body"] = input.body
+
+        if input.media is not strawberry.UNSET:
+            if input.media is not None and len(input.media) > 10:
+                raise ValueError("media may contain at most 10 items")
+            patch["media"] = [{"url": m.url, "mimeType": m.mime_type} for m in input.media] if input.media else None
+
+        if input.workout is not strawberry.UNSET:
+            if input.workout:
+                w = input.workout
+                patch["workout"] = {
+                    "activityType": w.activity_type,
+                    "durationSeconds": w.duration_seconds,
+                    "caloriesBurned": w.calories_burned,
+                    "distanceMiles": w.distance_miles,
+                    "avgHeartRate": w.avg_heart_rate,
+                    "maxHeartRate": w.max_heart_rate,
+                    "elevationFeet": w.elevation_feet,
+                    "startDate": w.start_date,
+                    "endDate": w.end_date,
+                }
+            else:
+                patch["workout"] = None
+
+        if input.body_metrics is not strawberry.UNSET:
+            if input.body_metrics:
+                bm = input.body_metrics
+                patch["bodyMetrics"] = {
+                    "weightLbs": bm.weight_lbs,
+                    "bodyFatPercentage": bm.body_fat_percentage,
+                    "restingHeartRate": bm.resting_heart_rate,
+                    "leanBodyMassLbs": bm.lean_body_mass_lbs,
+                }
+            else:
+                patch["bodyMetrics"] = None
+
+        if not patch:
+            raise ValueError("no valid fields provided for update")
+
+        updated_doc = await db.posts.find_one_and_update(
+            {"_id": oid, "authorUid": user_id, "isDeleted": {"$ne": True}},
+            {"$set": patch},
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if not updated_doc:
+            raise ValueError("post not found or unauthorized")
+
+        updated_doc["_id"] = str(updated_doc["_id"])
+        await set_cached(redis, _post_key(updated_doc["_id"]), updated_doc)
+
+        return _post_from_doc(updated_doc)
+
+    @strawberry.mutation
     async def delete_post(self, info: Info, id: strawberry.ID) -> bool:
         """Delete a post (only the author can delete their own post)."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         try:
             oid = ObjectId(str(id))
@@ -167,3 +246,11 @@ class PostMutation:
             return True
 
         return False
+
+    @strawberry.mutation
+    async def upload_post_media(self, info: Info, file: Upload) -> str:
+        """Upload a media file for use in a post and return its public URL."""
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
+        return await upload_image(file, f"posts/{user_id}")

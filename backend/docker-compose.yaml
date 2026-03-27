@@ -36,11 +36,16 @@ services:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
       MONGO_DB: fervora
       REDIS_URL: redis://redis:6379
+      FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+      FIREBASE_STORAGE_EMULATOR_HOST: firebase-emulator:9199
+      FIREBASE_PROJECT_ID: fervora-local
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
+      firebase-emulator:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s
@@ -67,6 +72,20 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  firebase-emulator:
+    build:
+      context: firebase-emulator
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+      - "9099:9099"
+      - "9199:9199"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -124,6 +143,8 @@ services:
       MONGO_URI: mongodb://mongodb:27017/?replicaSet=rs0&directConnection=true
       MONGO_DB: fervora_test
       REDIS_URL: redis://redis:6379
+      FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
+      FIREBASE_PROJECT_ID: fervora-local
     depends_on:
       graphql-service:
         condition: service_healthy

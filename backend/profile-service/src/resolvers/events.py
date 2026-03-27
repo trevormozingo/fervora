@@ -54,7 +54,9 @@ class EventMutation:
         """Create an event and optionally invite users."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         if not await db.profiles.find_one({"_id": user_id, "isDeleted": {"$ne": True}}, {"_id": 1}):
             raise ValueError("cannot create event: your profile does not exist or was deleted")
@@ -114,7 +116,9 @@ class EventMutation:
     async def rsvp_event(self, info: Info, input: RsvpInput) -> bool:
         """Set or update the current user's RSVP status for an event."""
         db = info.context["db"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         # Ensure the user has an active profile
         if not await db.profiles.find_one({"_id": user_id, "isDeleted": {"$ne": True}}, {"_id": 1}):
@@ -144,7 +148,9 @@ class EventMutation:
         """Soft-delete an event (organizer only)."""
         db = info.context["db"]
         redis = info.context["redis"]
-        user_id = info.context["user_id"]
+        user_id = info.context.get("user_id")
+        if not user_id:
+            raise ValueError("authentication required")
 
         try:
             oid = ObjectId(str(id))
